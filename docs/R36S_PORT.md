@@ -148,3 +148,30 @@ is not a valid conversion. Once an ARM64 build exists, ensure its runtime
 loader and linked libs match the R36S operating system. The menu shortcut is
 a convenience for manual experiments and does not claim full PortMaster
 packaging compliance (no validated controls, metadata, or device runtime).
+
+## Early startup diagnostics (2026-10-28)
+
+The two launchers now use POSIX `/bin/sh` rather than depending on Bash. Both
+open `valkyrierecomp/valkyrie-r36s.log` **before** checking for the game
+binary or disc images. If the ROM partition is not writable, they try the
+fallback `/tmp/valkyrie-r36s.log` (which may not survive a reboot).
+
+If no log appears, check that `ports/ValkyrieRecomp.sh` is visible in the Ports
+menu and actually invoked; then test directly via SSH/terminal, adapting
+`/roms` to `/roms2` for secondary SD setups:
+
+```sh
+sh /roms/ports/ValkyrieRecomp.sh
+cat /roms/ports/valkyrierecomp/valkyrie-r36s.log
+ls -l /roms/ports/valkyrierecomp/ValkyrieRecomp
+uname -m
+```
+
+**Expected state with the preparation-only ZIP:** log reports that the ARM64
+executable is missing (exit code 127); it cannot start the game. A prepared
+BIN/CUE directory is not a compiled port. A real AArch64 build with the target
+sysroot is still required before functional on-device tests.
+
+Local host-only smoke tests covered missing-binary logging, native 4:3,
+16:9 override, and argument forwarding with a dummy executable. These are not
+R36S hardware tests.
