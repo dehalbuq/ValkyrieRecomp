@@ -244,3 +244,55 @@ It writes `r36s-system-info.txt` in that directory (or `/tmp` if the
 ROM partition is read-only). Share the resulting text to identify the
 target GLIBC/SDL2 loader and choose an appropriate sysroot. It contains
 OS/runtime details, not game assets.
+
+## Alternative build using a PortMaster AArch64 Docker image (no manual sysroot)
+
+Inspired by the independently documented R36S SDR++ PortMaster work:
+https://github.com/jasiek/r36s-sdrplusplus . It uses the public
+`ghcr.io/monkeyx-net/portmaster-build-templates/portmaster-builder:aarch64-latest`
+image (Ubuntu 20.04 / glibc 2.31) as a conservative ABI baseline.
+**This does not prove compatibility with this specific DarkOSRE image**:
+check target GLIBC/SDL/loader before running. A glibc-newer target should
+generally load an older executable, but other ABIs and dependencies matter.
+
+Build stages:
+- Stage 1: x86_64 Linux/WSL2 host compiles PSXRecomp code generators and uses
+  your own local US Disc 1 BIN/CUE to generate game C + recompiled OpenBIOS.
+- Stage 2: Docker Desktop with WSL2 integration / Linux Docker runs an
+  `linux/arm64` container to compile those **existing** generated sources
+  natively for AArch64. Docker on x86_64 may require configured ARM64
+  emulation/binfmt. This does **not** invoke an x64 executable on the R36S.
+- Stage 3: only if linking succeeds, scripts stage the actual executable
+  under `build-r36s-package/ports/valkyrierecomp/ValkyrieRecomp`.
+
+On host, after a recursive checkout of this branch and placing Disc 1 in
+`disc/Disc1`:
+```sh
+# Ubuntu/WSL2 host dependencies (Docker Desktop/Engine installed separately):
+sudo apt update
+sudo apt install -y git cmake ninja-build build-essential python3 \
+    pkg-config
+
+# Generate C + compile in ARM64 Docker image:
+bash r36s/build-docker.sh --all
+
+# If generated/ already exists, skip generation:
+bash r36s/build-docker.sh --build-only
+```
+
+`r36s/docker/Dockerfile` installs SDL2/zlib development files into the
+PortMaster-derived build image and upgrades the too-old Ubuntu 20.04 CMake
+using the official Python ARM64 CMake 3.29.6 wheel. The Docker image may need
+access to pinned third-party dependency archives during CMake configuration.
+
+The staged output intentionally **does not include game images** and
+**does not bundle glibc, SDL2, the graphics stack or ALSA from the build
+container**. The target console's runtime libraries must be audited and,
+if required, supported private dependency libraries staged separately.
+Copy your own disc images after staging. Final boot, audio, input and
+performance testing remain pending. No prebuilt binary can be distributed
+until this actual full-game pipeline succeeds.
+
+The original alternative `r36s/build-r36s.sh --build` remains available for
+a cross compiler with a **matching DarkOSRE development sysroot**; the
+Docker path is optional, not a replacement for testing compatibility.
