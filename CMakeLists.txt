@@ -20,14 +20,39 @@ project(ValkyrieRecomp LANGUAGES C CXX)
 # if(EXISTS "${PSXRECOMP_ROOT}/lib/recomp-net/CMakeLists.txt")
 #     set(PSX_NETPLAY ON CACHE BOOL "..." FORCE)
 # endif()
-set(PSX_SETUP_WIZARD ON CACHE BOOL
-    "Advertise first-run setup wizard + Generate & rebuild in recomp-ui" FORCE)
+# R36S is an opt-in, lean ARM64 target. No desktop launcher is required:
+# the handheld starts the game via an external PortMaster-style shell script.
+# This profile does NOT claim an OpenGL ES game-renderer implementation.
+option(VALKYRIE_R36S "Build the experimental R36S/AArch64 profile" OFF)
+if(VALKYRIE_R36S)
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+        message(FATAL_ERROR
+            "VALKYRIE_R36S requires an AArch64 target toolchain/sysroot "
+            "(CMAKE_SYSTEM_PROCESSOR must be aarch64/arm64).")
+    endif()
+    set(PSX_SDL_BACKEND SDL2 CACHE STRING "SDL backend" FORCE)
+    set(PSX_RECOMP_UI OFF CACHE BOOL "Disable desktop launcher on R36S" FORCE)
+    set(PSX_ENABLE_VULKAN OFF CACHE BOOL "Disable Vulkan on R36S" FORCE)
+    set(PSX_SETUP_WIZARD OFF CACHE BOOL "No first-run desktop wizard" FORCE)
+    # Never emit a setup-only host and accidentally distribute it as the game.
+    set(PSXRECOMP_REQUIRE_GAME_C ON CACHE BOOL
+        "Require generated game sources for the handheld build" FORCE)
+else()
+    # Preserve the existing PC build/first-run setup behavior.
+    set(PSX_SETUP_WIZARD ON CACHE BOOL
+        "Advertise first-run setup wizard + Generate & rebuild in recomp-ui" FORCE)
+endif()
 include("${PSXRECOMP_ROOT}/runtime/runtime.cmake")
+
+set(_VALKYRIE_SETUP_ARGS)
+if(NOT VALKYRIE_R36S)
+    list(APPEND _VALKYRIE_SETUP_ARGS ENABLE_SETUP_WIZARD)
+endif()
 
 psxrecomp_add_game_runtime(psx-runtime
     # ENABLE_NETPLAY_IF_PRESENT
     # NETPLAY_LOBBY_URL "ws://netplay.retcomm.net:8765"
-    ENABLE_SETUP_WIZARD
+    ${_VALKYRIE_SETUP_ARGS}
     WINDOW_TITLE "ValkyrieRecomp"
     DEFAULT_GAME_CONFIG_PATH "game.toml"
     MAX_PLAYERS 2
@@ -37,6 +62,13 @@ psxrecomp_add_game_runtime(psx-runtime
     GEN_FULL_GLOB "generated/SLUS_011.56_full_*.c"
     CODEGEN_SETUP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/codegen_setup.c"
 )
+
+# Cortex-A35 tuning without -ffast-math or unsafe emulator arithmetic.
+if(VALKYRIE_R36S AND
+   CMAKE_C_COMPILER_ID MATCHES "^(GNU|Clang)$" AND
+   CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang)$")
+    target_compile_options(psx-runtime PRIVATE -mcpu=cortex-a35)
+endif()
 
 # Stage runtime configs next to the exe for direct build/ launches. Only copy
 # files that exist — never fail POST_BUILD when game_options.toml is absent.
