@@ -9,6 +9,8 @@ on:
     paths:
       - 'r36s/gpu_gl_stub.c'
       - 'CMakeLists.txt'
+      - 'r36s/build-*.sh'
+      - 'r36s/docker/Dockerfile'
       - '.github/workflows/r36s-source-check.yml'
   push:
     branches:
@@ -42,6 +44,17 @@ jobs:
           set -euo pipefail
           gcc -std=c11 -fsyntax-only -Wall -Wextra -Werror \
               -Ipsxrecomp/runtime/include r36s/gpu_gl_stub.c
+
+      - name: Check launcher and build script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n r36s/build-r36s.sh r36s/build-docker.sh \
+                  r36s/build-arm64-in-docker.sh
+          sh -n r36s/ValkyrieRecomp.sh \
+                r36s/PortMaster/ValkyrieRecomp.sh \
+                r36s/collect-system-info.sh
+          python3 -m json.tool CMakePresets.json >/dev/null
       - name: Verify intended backend selection
         shell: bash
         run: |
