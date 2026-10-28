@@ -1,0 +1,65 @@
+# Checks the self-contained R36S software-only OpenGL adapter against the
+# pinned PSXRecomp API. Does not compile copyrighted game code and does
+# NOT claim that an ARM64 game binary or playable port has been built.
+name: R36S software backend API check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'r36s/gpu_gl_stub.c'
+      - 'CMakeLists.txt'
+      - 'r36s/build-*.sh'
+      - 'r36s/docker/Dockerfile'
+      - '.github/workflows/r36s-source-check.yml'
+  push:
+    branches:
+      - 'r36s/arm64-sdl2-bootstrap'
+    paths:
+      - 'r36s/gpu_gl_stub.c'
+      - 'CMakeLists.txt'
+      - '.github/workflows/r36s-source-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  software-gl-adapter:
+    name: Validate C stub against pinned runtime headers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Validate submodule pin and headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f psxrecomp/runtime/include/gpu_gl_renderer.h
+          test -f psxrecomp/runtime/include/gpu_render.h
+          git -C psxrecomp rev-parse HEAD
+      - name: Compile software GL adapter (host syntax only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcc -std=c11 -fsyntax-only -Wall -Wextra -Werror \
+              -Ipsxrecomp/runtime/include r36s/gpu_gl_stub.c
+
+      - name: Check launcher and build script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n r36s/build-r36s.sh r36s/build-docker.sh \
+                  r36s/build-arm64-in-docker.sh
+          sh -n r36s/ValkyrieRecomp.sh \
+                r36s/PortMaster/ValkyrieRecomp.sh \
+                r36s/collect-system-info.sh
+          python3 -m json.tool CMakePresets.json >/dev/null
+      - name: Verify intended backend selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'list(REMOVE_ITEM PSXRECOMP_RUNTIME_SOURCES' CMakeLists.txt
+          grep -q 'gpu_gl_stub.c' CMakeLists.txt
+          grep -q 'PSXRECOMP_REQUIRE_GAME_C ON' CMakeLists.txt
+          grep -q 'OUTPUT_NAME "ValkyrieRecomp"' CMakeLists.txt
