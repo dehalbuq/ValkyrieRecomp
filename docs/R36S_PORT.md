@@ -116,3 +116,35 @@ For troubleshooting, record the entire `valkyrie-r36s.log`, the OS version,
    fallback without regressing the desktop OpenGL path.
 4. **Later** investigate language asset formats and a legal external
    Brazilian Portuguese translation patch; out of scope for this stage.
+
+## SD card folder layout (manual Ports menu shortcut, not an official package)
+
+The launcher is experimental and not registered/published in the PortMaster catalog.
+Stage the two launcher files into different levels, matching the tree:
+
+```text
+EASYROMS/ports/
+├── ValkyrieRecomp.sh                   # from r36s/PortMaster/ValkyrieRecomp.sh
+└── valkyrierecomp/
+    ├── ValkyrieRecomp.sh               # from r36s/ValkyrieRecomp.sh
+    ├── ValkyrieRecomp                  # NOT BUILT YET (ARM64 game executable)
+    ├── game.toml
+    ├── game_options.toml
+    ├── disc/
+    │   ├── Disc1/
+    │   │   ├── Valkyrie Profile (USA) (Disc 1).cue
+    │   │   └── Valkyrie Profile (USA) (Disc 1).bin
+    │   └── Disc2/
+    │       ├── Valkyrie Profile (USA) (Disc 2).cue
+    │       └── Valkyrie Profile (USA) (Disc 2).bin
+    ├── lib/
+    └── saves/
+```
+
+The inner launcher creates `game-r36s.local.toml` and `valkyrie-r36s.log`
+on launch. Do not distribute the ZIP as a working game: it lacks the compiled
+executable and proprietary disc assets. A lone .iso or .chd renamed to .bin
+is not a valid conversion. Once an ARM64 build exists, ensure its runtime
+loader and linked libs match the R36S operating system. The menu shortcut is
+a convenience for manual experiments and does not claim full PortMaster
+packaging compliance (no validated controls, metadata, or device runtime).
