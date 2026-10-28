@@ -33,6 +33,8 @@ if(VALKYRIE_R36S)
     set(PSX_SDL_BACKEND SDL2 CACHE STRING "SDL backend" FORCE)
     set(PSX_RECOMP_UI OFF CACHE BOOL "Disable desktop launcher on R36S" FORCE)
     set(PSX_ENABLE_VULKAN OFF CACHE BOOL "Disable Vulkan on R36S" FORCE)
+    set(PSX_REWIND OFF CACHE BOOL "Disable optional rewind snap-ring to save memory" FORCE)
+    set(PSX_ZLIB_FETCH OFF CACHE BOOL "Require target zlib in sysroot (no fallback download)" FORCE)
     set(PSX_SETUP_WIZARD OFF CACHE BOOL "No first-run desktop wizard" FORCE)
     # Never emit a setup-only host and accidentally distribute it as the game.
     set(PSXRECOMP_REQUIRE_GAME_C ON CACHE BOOL
@@ -43,6 +45,27 @@ else()
         "Advertise first-run setup wizard + Generate & rebuild in recomp-ui" FORCE)
 endif()
 include("${PSXRECOMP_ROOT}/runtime/runtime.cmake")
+
+if(VALKYRIE_R36S)
+    # The desktop GL source includes SDL_opengl.h and desktop OpenGL 3.3 APIs,
+    # which the R36S GLES/Panfrost sysroot generally does not provide.
+    # Replace only the GL backend with inert symbols. The existing CPU renderer
+    # and SDL2 presentation path continue to operate unmodified.
+    set(_VALKYRIE_DESKTOP_GL
+        "${PSXRECOMP_ROOT}/runtime/src/gpu_gl_renderer.c")
+    list(FIND PSXRECOMP_RUNTIME_SOURCES "${_VALKYRIE_DESKTOP_GL}"
+        _VALKYRIE_GL_SOURCE_INDEX)
+    if(_VALKYRIE_GL_SOURCE_INDEX EQUAL -1)
+        message(FATAL_ERROR
+            "PSXRecomp changed its renderer source list; inspect before "
+            "using the R36S software-only adapter.")
+    endif()
+    list(REMOVE_ITEM PSXRECOMP_RUNTIME_SOURCES "${_VALKYRIE_DESKTOP_GL}")
+    list(APPEND PSXRECOMP_RUNTIME_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/r36s/gpu_gl_stub.c")
+    message(STATUS
+        "R36S: desktop OpenGL source replaced with software-only adapter")
+endif()
 
 set(_VALKYRIE_SETUP_ARGS)
 if(NOT VALKYRIE_R36S)
@@ -62,6 +85,12 @@ psxrecomp_add_game_runtime(psx-runtime
     GEN_FULL_GLOB "generated/SLUS_011.56_full_*.c"
     CODEGEN_SETUP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/codegen_setup.c"
 )
+
+if(VALKYRIE_R36S)
+    # The PortMaster launcher expects the name ValkyrieRecomp, not psx-runtime.
+    # Leave the normal desktop build's output name unchanged.
+    set_target_properties(psx-runtime PROPERTIES OUTPUT_NAME "ValkyrieRecomp")
+endif()
 
 # Cortex-A35 tuning without -ffast-math or unsafe emulator arithmetic.
 if(VALKYRIE_R36S AND
