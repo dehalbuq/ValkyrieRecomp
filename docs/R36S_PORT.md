@@ -1,6 +1,6 @@
 # ValkyrieRecomp experimental R36S (RK3326 / DarkOSRE) bring-up
 
-**Status: scaffolding only; no ARM64 game binary has been built or validated.**
+**Status: software-only backend adapter and local build scripts prepared, but NO ARM64 game binary has been compiled or validated.**
 This is a separate `VALKYRIE_R36S` CMake profile; regular desktop builds remain unchanged.
 
 ## Hardware and display
@@ -175,3 +175,72 @@ sysroot is still required before functional on-device tests.
 Local host-only smoke tests covered missing-binary logging, native 4:3,
 16:9 override, and argument forwarding with a dummy executable. These are not
 R36S hardware tests.
+
+## Frankenbuild: Linux host + ARM64 target (experimental)
+
+The R36S profile now removes the desktop OpenGL translation unit from the
+runtime CMake source list and supplies a tested-by-API **C stub** from
+`r36s/gpu_gl_stub.c`. The stub **does not render anything**. The existing
+PSXRecomp *software rasterizer* renders the PS1 output while SDL2 is intended
+to present it. This avoids compiling the desktop GL 3.3 dependency in the
+handheld profile without altering the desktop build. The AArch64 output
+file is named `ValkyrieRecomp`, matching the launcher.
+
+The upstream release packages for macOS ARM64 and Linux x64 are setup hosts;
+they are not portable full-game binaries and do not contain generated game
+C. Combining those executables cannot bypass local generation from the game
+discs. For an experimental source-based port:
+
+1. On **x86_64 Ubuntu/WSL Linux**, install the host build tools
+   (`cmake`, `ninja-build`, `build-essential`, `python3`) and the target
+   toolchain (`gcc-aarch64-linux-gnu`, `g++-aarch64-linux-gnu`,
+   `pkg-config`). Build dependencies of PSXRecomp may require additional
+   packages; resolve errors from the pinned framework rather than silently
+   switching to a new framework revision.
+2. Check out this **branch** (the code is not merged into `main`), with
+   submodules initialized:
+   ```sh
+   git clone --recursive -b r36s/arm64-sdl2-bootstrap \
+     https://github.com/dehalbuq/ValkyrieRecomp.git
+   cd ValkyrieRecomp
+   ```
+3. Put your own US Disc 1 `BIN/CUE` at the paths in the root README; run:
+   ```sh
+   bash r36s/build-r36s.sh --generate
+   ```
+   This compiles host emitter tools and generates the **OpenBIOS** backend
+   and game C. These generated files stay local; they must not be committed
+   to the public repository.
+4. Build with a *matching DarkOSRE development sysroot*, not simply the R36S
+   ROM partition. It needs AArch64 libc, SDL2, zlib and development headers
+   (plus the other PSXRecomp dependencies). Point `R36S_SYSROOT` to it:
+   ```sh
+   export R36S_SYSROOT=/absolute/path/to/DarkOSRE-aarch64-dev-sysroot
+   bash r36s/build-r36s.sh --build
+   ```
+   Or use `--all` after both prerequisites are available.
+5. **Only upon a successful build**, inspect
+   `build-r36s-package/ports/valkyrierecomp/ValkyrieRecomp` using
+   `file`, `readelf`, and `ldd` on the device before gameplay testing.
+   The script deliberately does **not** include or distribute game discs.
+   The builder must add their own to `disc/Disc1/` and `disc/Disc2/`
+   after copying the package tree to SD.
+
+The cross-compile remains **unverified**, and this process may uncover new
+AArch64, SDL2, CHD library or memory/performance issues; no guaranteed
+fully linked output is claimed. A no-disc CI check only validates the
+stub header API.
+
+### Device-side ABI information
+
+Put `r36s/collect-system-info.sh` in
+`/roms/ports/valkyrierecomp/` and on the R36S run:
+
+```sh
+sh /roms/ports/valkyrierecomp/collect-system-info.sh
+```
+
+It writes `r36s-system-info.txt` in that directory (or `/tmp` if the
+ROM partition is read-only). Share the resulting text to identify the
+target GLIBC/SDL2 loader and choose an appropriate sysroot. It contains
+OS/runtime details, not game assets.
