@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase10 multi-ABI suite
+name: Lenneth Android R36S - ARM64 phase11 synthetic execution and C++ ABI
 
 on:
   workflow_dispatch:
@@ -303,6 +303,61 @@ jobs:
             exit 1
           fi
 
+      - name: Phase11 independent C++ ABI tests and first safe synthetic AArch64 code execution
+        run: |
+          ./build-lenneth/lenneth-probe --cxx-selftest | tee lenneth-cxx-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-cxx-test.txt
+
+          # Original synthetic ELF pair: no game bytes, no Android bypass.
+          # -nostdlib avoids startup objects/imports/constructors.
+          cat > /tmp/lenneth_mock_partner.c <<'EOF'
+          __attribute__((visibility("default")))
+          const char lenneth_phase11_mock_marker[] =
+              "LENNETH_PHASE11_SYNTHETIC_ONLY_2026";
+          __attribute__((visibility("default")))
+          int v1_shared_api(void) { return 37; }
+          static int partner_state = 13;
+          __attribute__((visibility("default")))
+          int *partner_relative_fixup = &partner_state;
+          EOF
+          cat > /tmp/lenneth_mock_guest.c <<'EOF'
+          __attribute__((visibility("default")))
+          const char lenneth_phase11_mock_marker[] =
+              "LENNETH_PHASE11_SYNTHETIC_ONLY_2026";
+          extern int v1_shared_api(void);
+          static int guest_state = 40;
+          __attribute__((visibility("default")))
+          int *guest_relative_fixup = &guest_state;
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm, void *unused) {
+              (void)vm;(void)unused;
+              return v1_shared_api() + *guest_relative_fixup;
+          }
+          EOF
+          cc -shared -nostdlib -fPIC -O2 -Wl,--no-undefined \
+             -o /tmp/lenneth_mock_partner.so /tmp/lenneth_mock_partner.c
+          cc -shared -nostdlib -fPIC -O2 \
+             -o /tmp/lenneth_mock_guest.so /tmp/lenneth_mock_guest.c
+          ./build-lenneth/lenneth-probe --execute-synthetic \
+              /tmp/lenneth_mock_guest.so /tmp/lenneth_mock_partner.so | tee lenneth-synthetic-execution.txt
+          grep -q 'EXECUTION=PASS' lenneth-synthetic-execution.txt
+          grep -q 'returned=77 expected=77' lenneth-synthetic-execution.txt
+
+          # A commercial ELF without both matching explicit test markers
+          # must NEVER be eligible for code execution.
+          if ./build-lenneth/lenneth-probe --execute-synthetic \
+              /tmp/phase7_game.so /tmp/phase3_partner.so; then
+            echo "ERROR: refused non-synthetic ELF was executed"
+            exit 1
+          fi
+
+          mkdir -p assets
+          ./build-lenneth/lenneth-probe --batch-headless \
+              /tmp/phase10_game.so /tmp/phase3_partner.so | tee lenneth-phase11-batch.txt
+          grep -q 'PHASE11_LINK=PASS' lenneth-phase11-batch.txt
+          grep -q 'C++ destructor/thread lifecycle synthetic fixtures: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase11-batch.txt
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -315,13 +370,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase10-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase10-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase10-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase11-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase11-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase11-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase10
-          path: lenneth-r36s-multitest-phase10-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase11
+          path: lenneth-r36s-multitest-phase11-arm64.zip
           if-no-files-found: error
           retention-days: 14
