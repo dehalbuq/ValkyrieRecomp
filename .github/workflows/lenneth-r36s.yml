@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase16 SDL PCM plus ABI multi-suite
+name: Lenneth Android R36S - ARM64 phase17 grouped POSIX ABI diagnostics
 
 on:
   workflow_dispatch:
@@ -552,6 +552,49 @@ jobs:
           grep -q 'queue_drained=1' lenneth-phase16-pcm-test.txt
           grep -q 'commercial_execution=NO' lenneth-phase16-pcm-test.txt
 
+      - name: Phase17 grouped POSIX compatibility selftest and synthetic ELF bindings
+        run: |
+          ./build-lenneth/lenneth-probe --phase17-selftest | tee lenneth-phase17-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase17-fixture.txt
+          grep -q 'abi_safe_symbols=15' lenneth-phase17-fixture.txt
+          grep -q 'directory_sandbox=PASS' lenneth-phase17-fixture.txt
+          grep -q 'locale_t_mbstate_t=UNMAPPED' lenneth-phase17-fixture.txt
+          cat > /tmp/lenneth_phase17_mock.c <<'EOF'
+          #include <stdint.h>
+          #include <time.h>
+          #include <wchar.h>
+          extern unsigned char __sF[];
+          extern void *opendir(const char *);
+          extern int closedir(void *);
+          extern int strcoll(const char *,const char *);
+          extern size_t strftime(char *,size_t,const char *,const struct tm *);
+          extern int wcscoll(const wchar_t *,const wchar_t *);
+          extern void syslog(int,const char *,...);
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved){
+            (void)vm;(void)reserved;
+            char s[32];
+            struct tm tmval={0};
+            volatile unsigned char b=__sF[0]; /* deliberately unresolved */
+            syslog(6,"fixture");
+            return b+(opendir("assets/levels")!=0)+closedir(0)+
+                   strcoll("a","b")+wcscoll(L"a",L"b")+
+                   (int)strftime(s,sizeof(s),"%Y",&tmval);
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase17_game.so /tmp/lenneth_phase17_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase17_game.so /tmp/phase3_partner.so | tee lenneth-phase17-batch.txt
+          grep -q 'PHASE17_LINK=PASS' lenneth-phase17-batch.txt
+          grep -Eq 'compat_abi_shims=[1-9][0-9]*' lenneth-phase17-batch.txt
+          grep -q 'Phase17 POSIX directory/time/text/logging fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase17-batch.txt
+          grep -q '__sF' lenneth-blockers.tsv
+          if grep -E '(opendir|closedir|strcoll|strftime|wcscoll)' lenneth-blockers.tsv; then
+            echo "ERROR: Phase17 safe ABI symbols still unresolved"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -566,13 +609,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase16-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase16-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase16-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase17-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase17-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase17-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase16
-          path: lenneth-r36s-multitest-phase16-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase17
+          path: lenneth-r36s-multitest-phase17-arm64.zip
           if-no-files-found: error
           retention-days: 14
