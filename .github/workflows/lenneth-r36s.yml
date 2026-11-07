@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase11 synthetic execution and C++ ABI
+name: Lenneth Android R36S - ARM64 phase12 multi-ABI fd, unicode and stack guard
 
 on:
   workflow_dispatch:
@@ -358,6 +358,54 @@ jobs:
           grep -q 'C++ destructor/thread lifecycle synthetic fixtures: PASS' lenneth-suite-summary.txt
           grep -q 'FINAL=PASS' lenneth-phase11-batch.txt
 
+      - name: Phase12 all-in-one fd sandbox UTF32 and Bionic object ABI tests
+        run: |
+          ./build-lenneth/lenneth-probe --fd-selftest | tee lenneth-fd-test.txt
+          ./build-lenneth/lenneth-probe --unicode-selftest | tee lenneth-unicode-test.txt
+          ./build-lenneth/lenneth-probe --bionic-data-selftest | tee lenneth-data-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-fd-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-unicode-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-data-test.txt
+
+          cat > /tmp/lenneth_phase12_mock.c <<'EOF'
+          #include <stddef.h>
+          #include <stdint.h>
+          #include <unistd.h>
+          #include <wchar.h>
+          extern unsigned long __stack_chk_guard;
+          extern int v1_shared_api(void);
+          extern int open(const char*,int,...);
+          extern ssize_t read(int,void*,size_t);
+          extern int close(int);
+          extern void *memalign(size_t,size_t);
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *arg){
+            (void)vm;(void)arg;
+            wchar_t wide[8]={L'T',L'E',L'S',L'T',0};
+            volatile size_t n=wcslen(wide);
+            int fd=open("assets/synthetic.txt",0);
+            char text[24];
+            if(fd>=0){read(fd,text,sizeof(text));close(fd);}
+            void *m=memalign(64,256);
+            volatile uintptr_t canary=__stack_chk_guard;
+            return (int)(n+(canary!=0)+(m!=0)+v1_shared_api());
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase12_game.so /tmp/lenneth_phase12_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase12_game.so /tmp/phase3_partner.so | tee lenneth-phase12-batch-test.txt
+          grep -q 'PHASE12_LINK=PASS' lenneth-phase12-batch-test.txt
+          grep -Eq 'host_fd_slots=[1-9][0-9]*' lenneth-phase12-batch-test.txt
+          grep -Eq 'host_unicode_slots=[1-9][0-9]*' lenneth-phase12-batch-test.txt
+          grep -Eq 'host_data_slots=[1-9][0-9]*' lenneth-phase12-batch-test.txt
+          grep -q 'POSIX sandboxed file descriptor synthetic fixtures: PASS' lenneth-suite-summary.txt
+          grep -q 'UTF-32 array ABI synthetic fixtures: PASS' lenneth-suite-summary.txt
+          grep -q 'Bionic random stack guard data synthetic fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase12-batch-test.txt
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid ELF passed phase12 batch"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -372,13 +420,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase11-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase11-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase11-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase12-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase12-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase12-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase11
-          path: lenneth-r36s-multitest-phase11-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase12
+          path: lenneth-r36s-multitest-phase12-arm64.zip
           if-no-files-found: error
           retention-days: 14
