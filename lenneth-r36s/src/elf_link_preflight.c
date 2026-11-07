@@ -32,6 +32,7 @@
 #include "bionic_stdio.h"
 #include "opensl_bridge.h"
 #include "compat_phase17.h"
+#include "bionic_locale18.h"
 #include <sys/stat.h>
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
@@ -48,6 +49,7 @@ static int g_saveops_binding_enabled=0;
 static int g_bionic_stdio_binding_enabled=0;
 static int g_opensl_binding_enabled=0;
 static int g_phase17_binding_enabled=0;
+static int g_locale18_binding_enabled=0;
 typedef struct {
     const char *label;
     uint8_t *raw, *image;
@@ -61,7 +63,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, host_stdio, host_opensl, host_compat, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, host_stdio, host_opensl, host_compat, host_locale18, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -438,6 +440,11 @@ static int relocate_table(Module *m,Module *partner,
                        ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
                       lenneth_phase17_lookup(name,&value)){
                 st->host_compat++;
+            } else if(g_locale18_binding_enabled &&
+                      (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+                       ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+                      lenneth_locale18_lookup(name,&value)){
+                st->host_locale18++;
             } else {
                 st->unresolved++;
                 continue;
@@ -515,7 +522,11 @@ static size_t dump_blockers(FILE *out,const Module *m,const Module *partner){
             (g_phase17_binding_enabled &&
              (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
               ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
-             lenneth_phase17_lookup(name,&address)))continue;
+             lenneth_phase17_lookup(name,&address)) ||
+            (g_locale18_binding_enabled &&
+             (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
+              ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
+             lenneth_locale18_lookup(name,&address)))continue;
         const char *risk=category(name);
         const char *strength=ELF64_ST_BIND(sym->st_info)==STB_WEAK?
                              "weak_optional":"strong_or_other";
@@ -597,6 +608,10 @@ static size_t unresolved_import_names(const Module *m,
            (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
             ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
            lenneth_phase17_lookup(name,&addr))continue;
+        if(g_locale18_binding_enabled &&
+           (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+            ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+           lenneth_locale18_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -627,6 +642,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     g_bionic_stdio_binding_enabled=(provider_mode>=11);
     g_opensl_binding_enabled=(provider_mode>=12);
     g_phase17_binding_enabled=(provider_mode>=13);
+    g_locale18_binding_enabled=(provider_mode>=14);
     if(provider_mode>=1)provider_init();
     if(provider_mode>=2)lenneth_portable_open();
     if(provider_mode>=3){
@@ -727,6 +743,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    " stdio_proxy_shims=%" PRIu64
                    " opensl_abi_shims=%" PRIu64
                    " compat_abi_shims=%" PRIu64
+                   " locale18_abi_shims=%" PRIu64
                    " unresolved_sites=%" PRIu64
                    " missing_name_entries=%zu unsupported_types=%" PRIu64
                    " guest_execution=NO\n",
@@ -745,10 +762,16 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    gs.host_stdio+cs.host_stdio,
                    gs.host_opensl+cs.host_opensl,
                    gs.host_compat+cs.host_compat,
+                   gs.host_locale18+cs.host_locale18,
                    gs.unresolved+cs.unresolved,
                    missing_game+missing_cxx,
                    gs.unsupported+cs.unsupported);
         }
+        if(provider_mode>=14)
+            printf("[lenneth locale18] PHASE18_LINK=PASS "
+                   "locale18_abi_shims=%" PRIu64 " unresolved_sites=%" PRIu64
+                   " locale_buffers=ISOLATED guest_engine=NOT_EXECUTED\n",
+                   gs.host_locale18+cs.host_locale18,gs.unresolved+cs.unresolved);
         if(provider_mode>=13)
             printf("[lenneth phase17] PHASE17_LINK=PASS "
                    "compat_abi_shims=%" PRIu64 " unresolved_sites=%" PRIu64
@@ -865,6 +888,7 @@ cleanup:
     g_bionic_stdio_binding_enabled=0;
     g_opensl_binding_enabled=0;
     g_phase17_binding_enabled=0;
+    g_locale18_binding_enabled=0;
     if(provider_mode>=10){lenneth_saveops_close();lenneth_ndk_dl_close_all();}
     if(provider_mode>=9)lenneth_fd_provider_close();
     unload(&game);
@@ -1038,4 +1062,7 @@ int lenneth_batch_opensl_plan(const char *game_path,const char *cxx_path) {
 }
 int lenneth_batch_phase17_plan(const char *game_path,const char *cxx_path){
     return lenneth_link_preflight_mode(game_path,cxx_path,13);
+}
+int lenneth_batch_phase18_plan(const char *game_path,const char *cxx_path){
+    return lenneth_link_preflight_mode(game_path,cxx_path,14);
 }
