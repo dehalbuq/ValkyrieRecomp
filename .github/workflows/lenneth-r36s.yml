@@ -614,8 +614,7 @@ jobs:
           extern long long strtoll_l(const char *, char **, int, void *);
           extern unsigned long long strtoull_l(const char *, char **, int, void *);
           extern long double strtold_l(const char *, char **, void *);
-          extern size_t mbrtowc(wchar_t *, const char *, size_t, void *);
-          extern size_t wcrtomb(char *, wchar_t, void *);
+          /* Use the native wchar.h prototypes for synthetic ELF imports. */
           __attribute__((visibility("default")))
           int JNI_OnLoad(void *vm,void *reserved){
             (void)vm;(void)reserved;
