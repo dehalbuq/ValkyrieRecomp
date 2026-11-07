@@ -12,7 +12,8 @@ fi
 
 for PATCH in \
     "$ROOT/r36s/patches/psxrecomp-overlay-loader-label.patch" \
-    "$ROOT/r36s/patches/psxrecomp-no-desktop-gl-link.patch"; do
+    "$ROOT/r36s/patches/psxrecomp-no-desktop-gl-link.patch" \
+    "$ROOT/r36s/patches/psxrecomp-fntrace-c-linkage.patch"; do
     [ -f "$PATCH" ] || { echo "[R36S] Patch missing: $PATCH" >&2; exit 1; }
     if git -C "$FRAMEWORK" apply --reverse --check "$PATCH" >/dev/null 2>&1; then
         echo "[R36S] Patch already applied: $(basename "$PATCH")"
