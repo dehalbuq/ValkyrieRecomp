@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–8, now with one-run multitest. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–9, with one-run multitest. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -478,3 +478,78 @@ and other system APIs remain unresolved. Future development can
 now prioritize and validate multiple independent ABI adapters using
 the complete blocker inventory in one iteration, with targeted
 unit-tests in CI before a combined R36S physical run.
+
+## Phase 9: accelerate Bionic/thread and portable C ABI coverage in one run
+
+The owner's real R36S phase-8 ZIP passed every synthetic and hardware
+diagnostic. Its complete \`lenneth-blockers.tsv\` contained **218 pending
+guest-symbol entries across two modules**, or **180 distinct names**
+after deduplicating the modules:
+
+| unresolved category | entries across both modules |
+| --- | ---: |
+| Bionic/libc/libm/libdl | 165 |
+| Bionic pthread | 43 |
+| OpenSL ES | 5 |
+| C++ ABI / destructor lifecycle | 5 |
+
+**Phase 9 does NOT execute Android commercial game code.**
+
+Changes now tested together:
+
+1. Added \`bionic_threads.c/.h\`, an **experimental and bounded**
+   Android-pthread compatibility shim. Guest mutex/condition/once/
+   mutex-attribute/thread-attribute pointers are used only as opaque
+   lookup keys, while the real pthread state is in a native Linux
+   registry. A thread/TLS/condition/mutex/once fixture runs using
+   independently written, synthetic C code, not the game.
+2. The shim can provide named Android \`pthread_*\` function addresses
+   during the **non-executable** ELF relocation inventory, while
+   preserving the distinction between guest and host data layouts.
+3. Expanded the conservative C allowlist with basic math, ctype,
+   POSIX time and numeric-formatting functions. Passing the linker
+   does not guarantee compatible behavior of the game at runtime.
+4. All prior tests (GLES2/EGL, libc/libm, AAsset, Android log, JNI
+   export listing) and the new pthread fixture run in the **same**
+   R36S launch. The two ARM64 libraries are mapped only once.
+5. The report ZIP still contains just \`lenneth-r36s.log\`,
+   \`lenneth-suite-summary.txt\` and \`lenneth-blockers.tsv\`.
+   It does not contain any game library, asset, DRM key or CPK.
+
+### Cautions
+
+- This is NOT a completed Bionic pthread ABI emulation.
+- Android mutex static-recursive/error-check initializer values are
+  not interpreted yet; some scheduling/cond-attr/cancellation features
+  are unsupported, and the 2,048-object registry is deliberately
+  capped. Further target-specific tests are required.
+- No dynamic guest constructors, \`JNI_OnLoad\`, graphics or audio engine
+  code run. There are still unresolved imported functions and object
+  symbols. **Do not interpret the reduced blocker count as playable
+  progress until actual controlled game startup is demonstrated.**
+- GNU libstdc++ exceptions, \`__cxa_*\` destructor lifecycle, Bionic
+  \`FILE*\`, \`__errno\`, \`__sF\`, OpenSL ES/CRIWARE and Java/JNI
+  remain future compatibility work.
+
+### Testing on your R36S
+
+Download the \`Lenneth-Android-R36S-ARM64-Multitest-Phase9\` workflow
+artifact; extract its inner
+\`lenneth-r36s-multitest-phase9-arm64.zip\` to the same ROM partition.
+Preserve your private \`libMyGame.so\` and \`libc++_shared.so\`
+in \`ports/lenneth-r36s/\`. Launch **Ports > Lenneth Android R36S
+Test** once. Send back only
+\`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\`.
+
+Expected new lines (counts depend on actual firmware/libraries):
+
+\`\`\`
+[lenneth bionic-thread] SELFTEST=PASS ...
+[lenneth bionic-thread] PHASE9_LINK=PASS ...
+[lenneth suite] BATCH_LINK=PASS ...
+[lenneth suite] FINAL=PASS ...
+\`\`\`
+
+The release still does NOT contain game content. The owner must keep
+commercial libraries on their own hardware. This is a development
+diagnostic, not a playable PortMaster release.
