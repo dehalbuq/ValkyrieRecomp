@@ -57,6 +57,9 @@ if [ -n "$game_so" ] && [ -n "$cxx_so" ]; then
     ./lenneth-probe --host-plan "$game_so" "$cxx_so" || echo "WARNING: phase4 host GLES/EGL linking preflight failed"
     echo "Phase5 conservative libc/libm import provider plan: $game_so + $cxx_so"
     ./lenneth-probe --portable-plan "$game_so" "$cxx_so" || echo "WARNING: phase5 native libc/libm preflight failed"
+    if [ ! -d assets ]; then
+        mkdir -p assets 2>/dev/null || echo "[lenneth asset] cannot create optional local assets folder"
+    fi
     echo "Phase6 Android AAssetManager read-only native import plan: $game_so + $cxx_so"
     ./lenneth-probe --asset-plan "$game_so" "$cxx_so" || echo "WARNING: phase6 AAssetManager link preflight failed"
 else
