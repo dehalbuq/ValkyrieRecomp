@@ -62,7 +62,8 @@ if(VALKYRIE_R36S)
     endif()
     list(REMOVE_ITEM PSXRECOMP_RUNTIME_SOURCES "${_VALKYRIE_DESKTOP_GL}")
     list(APPEND PSXRECOMP_RUNTIME_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/r36s/gpu_gl_stub.c")
+        "${CMAKE_CURRENT_SOURCE_DIR}/r36s/gpu_gl_stub.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/r36s/r36s_exit_menu.cpp")
     message(STATUS
         "R36S: desktop OpenGL source replaced with software-only adapter")
 endif()
@@ -90,6 +91,9 @@ if(VALKYRIE_R36S)
     # The PortMaster launcher expects the name ValkyrieRecomp, not psx-runtime.
     # Leave the normal desktop build's output name unchanged.
     set_target_properties(psx-runtime PROPERTIES OUTPUT_NAME "ValkyrieRecomp")
+    target_compile_definitions(psx-runtime PRIVATE VALKYRIE_R36S=1)
+    target_include_directories(psx-runtime PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/r36s")
 endif()
 
 # PSXRecomp links pthread only when its optional lobby client is enabled.
