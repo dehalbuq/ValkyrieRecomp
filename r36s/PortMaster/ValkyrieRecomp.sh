@@ -25,7 +25,7 @@ if [ ! -f "$launcher" ]; then
 fi
 
 # /bin/sh avoids requiring Bash for the early bring-up and diagnostics.
-/bin/sh "$launcher" "$@"
+/bin/bash "$launcher" "$@"
 rc=$?
 printf '[ports] Launcher returned status: %s\n' "$rc"
 exit "$rc"
