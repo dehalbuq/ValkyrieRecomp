@@ -283,6 +283,25 @@ void gl_renderer_batch_diag(uint64_t out[8])
     if (out) memset(out, 0, 8 * sizeof(*out));
 }
 
+/* These global controls and counters are otherwise defined exclusively in
+ * gpu_gl_renderer.c. The software renderer and debug commands still reference
+ * them even if the desktop GL backend is removed from the R36S build.
+ *
+ * Keep the upstream defaults: 16:9 software backdrop options remain
+ * configurable, while GL-specific diagnostics stay zero/inactive. */
+int g_ws_bd_stretch_on = 1;
+int g_ws_bd_stretch_pct = 0;
+int g_ws_bd_phase_thresh = 24;
+int g_ws_bd_phase_mode = 1;
+
+int g_bdg_applied = 0;
+int g_bdg_prims = 0;
+int g_bdg_clearx = -999999;
+int g_bdg_cur = 0;
+int g_bdg_base = 0;
+int g_bdg_w = 0;
+int g_bdg_off = 0;
+
 /* Two legacy diagnostic symbols defined by the desktop backend but not
  * declared in gpu_gl_renderer.h. Other runtime modules can reference them. */
 int gl_renderer_get_wide_fast(void) { return 0; }
