@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "r36s-arm64-release",
+      "displayName": "R36S ARM64 (Release, SDL2 software)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-r36s-arm64-release",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/r36s/toolchain-aarch64.cmake",
+        "CMAKE_BUILD_TYPE": "Release",
+        "VALKYRIE_R36S": "ON",
+        "PSX_DEBUG_TOOLS": "OFF"
+      }
+    },
+    {
+      "name": "r36s-arm64-debug",
+      "displayName": "R36S ARM64 (RelWithDebInfo + diagnostics)",
+      "inherits": "r36s-arm64-release",
+      "binaryDir": "${sourceDir}/build-r36s-arm64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "PSX_DEBUG_TOOLS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "r36s-arm64-release",
+      "configurePreset": "r36s-arm64-release",
+      "targets": [
+        "psx-runtime"
+      ]
+    },
+    {
+      "name": "r36s-arm64-debug",
+      "configurePreset": "r36s-arm64-debug",
+      "targets": [
+        "psx-runtime"
+      ]
+    }
+  ]
+}
