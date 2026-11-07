@@ -24,6 +24,8 @@ static int s_previous_cancel = 0;
 static int s_previous_f10 = 0;
 static int s_raw_start = -1;
 static int s_raw_select = -1;
+static Uint32 s_profile_start_ms = 0;
+static unsigned s_profile_frames = 0;
 
 static int read_index(const char *name) {
     const char *v = getenv(name);
@@ -136,6 +138,20 @@ void r36s_exit_menu_tick(void) {
     SDL_JoystickUpdate();
     refresh_controller();
     s_now = SDL_GetTicks();
+    /* Count host-observed PSX VBlanks. This measures actual simulated frames
+     * per wall second without relying on display's fixed 59Hz refresh cap. */
+    if (!s_profile_start_ms) s_profile_start_ms = s_now;
+    ++s_profile_frames;
+    const Uint32 dt = s_now - s_profile_start_ms;
+    if (dt >= 5000) {
+        fprintf(stdout,
+                "[R36S perf] simulated_vblanks=%u elapsed_ms=%u effective_fps=%.2f (refresh is NOT fps)\\n",
+                s_profile_frames, (unsigned)dt,
+                (double)s_profile_frames * 1000.0 / (double)dt);
+        fflush(stdout);
+        s_profile_frames = 0;
+        s_profile_start_ms = s_now;
+    }
 
     const Uint8 *key = SDL_GetKeyboardState(NULL);
     const int both_keys =
