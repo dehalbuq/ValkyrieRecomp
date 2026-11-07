@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 typedef struct {uint32_t magic, saved_mask;uint64_t slots[31];} LegacyBionicJmp;
@@ -114,6 +115,10 @@ static int test_bad_magic(void){
     pid_t child=fork();
     if(child<0)return 0;
     if(child==0){
+        /* Device safety: abort remains confined to this child, without
+         * creating a large crash dump on the handheld's memory card. */
+        struct rlimit no_core={.rlim_cur=0,.rlim_max=0};
+        (void)setrlimit(RLIMIT_CORE,&no_core);
         struct sigaction ignore={0};
         ignore.sa_handler=SIG_DFL;
         sigaction(SIGABRT,&ignore,NULL);
