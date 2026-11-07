@@ -1009,3 +1009,20 @@ remains **non-executable** in the production diagnostic loader.
 The launcher now runs a standalone original PCM fixture during its 15-second GLES2 and input probe. It queues two stereo signed-16 44.1 kHz quarter-second tones into SDL2; on R36S the audio driver is normally ALSA. The fixture checks both buffers were queued and that the SDL queue fully drains, with a finite timeout. The generated ZIP includes `PCM_SDL_SELFTEST` and `PHASE16_PCM` markers in the log. CI uses `SDL_AUDIODRIVER=dummy ./lenneth-probe --pcm-selftest` to exercise the same mechanics without a sound card.
 
 **Limitations:** Queue-draining cannot prove the tone was audible. This is a separate native SDL PCM fixture, NOT yet a fully connected OpenSL ES-to-SDL queue adapter. The commercial Android game library is not executed. Existing synthetic OpenSL ABI/linker/ELF tests and the single three-report diagnostic ZIP remain in place.
+
+
+## Fase 17: autotestes agrupados de compatibilidade POSIX (ARM64)
+
+A Fase 17 reúne **15 funções** em um único lote, além de executar todos os autotestes anteriores, a verificação de GLES2, áudio PCM SDL2/ALSA, controle, relocações ELF e JNI. A saída permanece **um único ZIP** `ports/lenneth-r36s/lenneth-r36s-diagnostics.zip` com três relatórios.
+
+Compatibilidade implementada em `src/compat_phase17.c` e validada por autotestes independentes:
+
+- Diretórios: `opendir`, `closedir`, usando descritores restritos a `assets/` e `saves/`, com `DIR*` encapsulado e rejeição de travessia/symlinks.
+- Datas: `gmtime`, `localtime`, `strftime`; sem expor buffers globais compartilhados de data/hora.
+- Texto: `strcoll`, `strxfrm`, `wcscoll`, `wcsxfrm`, `strerror_r` (retorno POSIX `int`), `vasprintf`.
+- Logging: `openlog`, `syslog`, `closelog`, com saída de diagnóstico em stderr, sem enviar dados ao syslog do sistema.
+- Prioridade: `getpriority` restrito à consulta do próprio processo. `setpriority` não é mapeado para evitar alterar prioridades do console.
+
+**Permanecem bloqueados deliberadamente:** `__sF`/`fdopen` (ABI Bionic FILE), `stat`/`fstat` (layout Android de `struct stat`), `setjmp`/`longjmp`, `newlocale`/`freelocale`/`uselocale` (ponte `locale_t`), funções `mbstate_t`, `syscall`, `system`, `dl_iterate_phdr` e `readdir`. Um nome resolvido no preflight ainda **não** significa que o motor comercial pode ser executado: o código do jogo segue não executado.
+
+O arquivo de CI da Fase 17 utiliza apenas bibliotecas sintéticas ARM64 e impede a inclusão de arquivos comerciais nos artefatos públicos.
