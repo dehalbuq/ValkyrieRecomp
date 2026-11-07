@@ -47,6 +47,12 @@ if [ -z "${SDL_AUDIODRIVER:-}" ]; then export SDL_AUDIODRIVER=alsa; fi
 export PSXRECOMP_AUDIO_LEGACY="${PSXRECOMP_AUDIO_LEGACY:-1}"
 # Physical pad takes priority; the fallback merge keeps keyboard usable too.
 export PSX_DEV_INPUT="${PSX_DEV_INPUT:-1}"
+# Audited PSXRecomp loop-shape idle skip. Conserves guest cycles and device
+# scheduling; may improve CPU-bound BIOS/game spin loops. No unsafe counter
+# decrement extension without game-specific sites. A/B with IDLE_SKIP=0.
+export PSX_IDLE_SKIP="${VALKYRIE_IDLE_SKIP:-1}"
+export PSX_IDLE_SKIP_EXT=0
+echo "[R36S cpu] PSX_IDLE_SKIP=$PSX_IDLE_SKIP, PSX_IDLE_SKIP_EXT=0"
 export PSX_NO_LAUNCHER=1
 echo "[R36S] SDL_VIDEO=${SDL_VIDEODRIVER:-auto}, SDL_RENDER=${SDL_RENDER_DRIVER:-auto}, SDL_AUDIO=${SDL_AUDIODRIVER:-auto}, AUDIO_LEGACY=$PSXRECOMP_AUDIO_LEGACY"
 echo "[R36S] Exit: hold START+SELECT about 2.5s, then A=exit or B=resume. F10 on keyboard."
