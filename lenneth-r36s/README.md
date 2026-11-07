@@ -1026,3 +1026,14 @@ Compatibilidade implementada em `src/compat_phase17.c` e validada por autotestes
 **Permanecem bloqueados deliberadamente:** `__sF`/`fdopen` (ABI Bionic FILE), `stat`/`fstat` (layout Android de `struct stat`), `setjmp`/`longjmp`, `newlocale`/`freelocale`/`uselocale` (ponte `locale_t`), funções `mbstate_t`, `syscall`, `system`, `dl_iterate_phdr` e `readdir`. Um nome resolvido no preflight ainda **não** significa que o motor comercial pode ser executado: o código do jogo segue não executado.
 
 O arquivo de CI da Fase 17 utiliza apenas bibliotecas sintéticas ARM64 e impede a inclusão de arquivos comerciais nos artefatos públicos.
+
+
+## Phase 18: independent Bionic LP64 locale and UTF-8 ABI fixtures
+
+This phase adds 17 reviewed Bionic AArch64 symbol bindings in **one consolidated R36S test**: `setlocale`, `newlocale`, `freelocale`, `uselocale`, `localeconv`, `strtoll_l`, `strtoull_l`, `strtold_l`, `strtold`, `swprintf`, `mbtowc`, `mbrtowc`, `mbrlen`, `mbsrtowcs`, `mbsnrtowcs`, `wcsnrtombs`, and `wcrtomb`.
+
+Bionic `locale_t` **must not** be passed to glibc's `locale_t` functions. Instead, original bounded guest locale tokens and a thread-local selection are used. The implementation follows Android's documented supported locale names and 0–12 category numbering, without changing the host process locale. The Bionic ARM64 `mbstate_t` is eight bytes, but does **not** have a guaranteed glibc-compatible layout: the bridge uses its own eight-byte incremental UTF-8 state and checks invalid, overlong and surrogate inputs. Non-UTF8 mode only accepts ASCII in this conservative implementation.
+
+GitHub Actions tests the 17 entry points with a synthetic AArch64 shared object and confirms that `__sF` remains unresolved. The R36S launcher runs all prior checks and the new tests once, and produces exactly the usual ZIP containing `lenneth-r36s.log`, `lenneth-blockers.tsv`, and `lenneth-suite-summary.txt`.
+
+**Limitations:** Android long-double and locale formatting paths require further real-hardware inspection; this is a non-executing relocation and synthetic ABI fixture, **not** proof of commercial code compatibility. Still unmapped: `__sF`, `fdopen`, `stat/fstat`, `setjmp/longjmp`, `syscall`, `sysconf`, `system`, and `dl_iterate_phdr`. The original game libraries remain user-provided; no proprietary data is distributed.
