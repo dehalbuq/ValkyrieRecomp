@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 10: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 11: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,13 +12,14 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 10 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 11 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
 echo "[lenneth suite] This does NOT execute commercial game code."
 echo "[lenneth suite] Experimental pthread guest-object adapters and extra libc/libm functions enabled in this batch."
 echo "[lenneth suite] Additional bounded Bionic FORTIFY/errno adapters and synthetic self-test enabled."
+echo "[lenneth suite] C++ lifecycle + independent synthetic ARM64 executable loader test enabled."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
@@ -59,6 +60,20 @@ if [ ! -d assets ]; then
     mkdir -p assets 2>/dev/null || echo "[lenneth asset] cannot create optional empty assets folder"
 fi
 rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv"
+echo "[lenneth synthetic] Testing explicitly marked original synthetic ARM64 modules."
+synthetic_rc=9
+if [ -f mock/synthetic_guest.so ] && [ -f mock/synthetic_partner.so ]; then
+    ./lenneth-probe --execute-synthetic mock/synthetic_guest.so mock/synthetic_partner.so
+    synthetic_rc=$?
+else
+    echo "[lenneth synthetic] fixture files missing"
+fi
+if [ "$synthetic_rc" -eq 0 ]; then
+    echo "[lenneth synthetic] R36S_EXECUTION=PASS commercial_engine=NOT_EXECUTED"
+else
+    echo "[lenneth synthetic] R36S_EXECUTION=FAIL code=$synthetic_rc commercial_engine=NOT_EXECUTED"
+fi
+
 
 if [ -n "$game_so" ] && [ -n "$cxx_so" ]; then
     if [ "$LENNETH_FULL_DIAG" = 1 ]; then
@@ -81,6 +96,14 @@ else
     ./lenneth-probe --video --seconds 15
     rc=10
 fi
+if [ -f "$root/lenneth-suite-summary.txt" ]; then
+    if [ "$synthetic_rc" -eq 0 ]; then
+        echo "Synthetic ARM64 ELF execution on R36S: PASS" >> "$root/lenneth-suite-summary.txt"
+    else
+        echo "Synthetic ARM64 ELF execution on R36S: FAIL ($synthetic_rc)" >> "$root/lenneth-suite-summary.txt"
+    fi
+fi
+if [ "$synthetic_rc" -ne 0 ] && [ "$rc" -eq 0 ]; then rc=13; fi
 
 # Package only three text reports. Never include libraries or game assets.
 if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ]; then
