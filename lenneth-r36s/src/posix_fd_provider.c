@@ -107,6 +107,33 @@ static int guest_open(const char *path,int flags,...) {
 int lenneth_fd_open_guest_path(const char *path,int flags,mode_t mode) {
     return guest_open(path,flags,(int)mode);
 }
+/* Phase20: verify an existing descriptor's current kernel target is a
+ * regular file below a configured sandbox root. This is used by the fdopen
+ * opaque FILE adapter; it never trusts arbitrary host file descriptors. */
+int lenneth_fd_is_guest_regular(int fd){
+    if(fd<0 || assets_fd<0 || saves_fd<0){errno=EBADF;return 0;}
+    struct stat st;
+    if(fstat(fd,&st)!=0 || !S_ISREG(st.st_mode)){errno=EACCES;return 0;}
+    char link_name[80],target[PATH_MAX],asset_root[PATH_MAX],save_root[PATH_MAX];
+    snprintf(link_name,sizeof(link_name),"/proc/self/fd/%d",fd);
+    ssize_t len=readlink(link_name,target,sizeof(target)-1);
+    if(len<1 || len>=(ssize_t)sizeof(target)-1){errno=EACCES;return 0;}
+    target[len]=0;
+    snprintf(link_name,sizeof(link_name),"/proc/self/fd/%d",assets_fd);
+    len=readlink(link_name,asset_root,sizeof(asset_root)-1);
+    if(len<1 || len>=(ssize_t)sizeof(asset_root)-1){errno=EACCES;return 0;}
+    asset_root[len]=0;
+    snprintf(link_name,sizeof(link_name),"/proc/self/fd/%d",saves_fd);
+    len=readlink(link_name,save_root,sizeof(save_root)-1);
+    if(len<1 || len>=(ssize_t)sizeof(save_root)-1){errno=EACCES;return 0;}
+    save_root[len]=0;
+    size_t a=strlen(asset_root),b=strlen(save_root);
+    int allowed=(strncmp(target,asset_root,a)==0 && target[a]=='/') ||
+                (strncmp(target,save_root,b)==0 && target[b]=='/');
+    if(!allowed)errno=EACCES;
+    return allowed;
+}
+
 static ssize_t guest_read(int fd,void *dst,size_t n){return read(fd,dst,n);}
 static ssize_t guest_write(int fd,const void *src,size_t n){return write(fd,src,n);}
 static int guest_close(int fd){return close(fd);}
