@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–6. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–7. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -358,3 +358,54 @@ This is a **non-executing import and stand-alone asset shim test**,
 not gameplay or a full Android emulation runtime. Future work:
 Bionic thread object layouts/TLS, JNI Cocos2d glue, OpenSL ES
 runtime and careful ELF memory protection before execution.
+
+## Phase 7: Android NDK logging bridge and JNI entrypoint inventory
+
+The actual dArkOSRE R36S phase-6 test passed:
+- All **11/11 AAssetManager import slots** in the private Android
+  `libMyGame.so` were resolved to our local read-only adapter.
+- Native GLES/EGL: 97 bound slots. Portable libc/libm: 70.
+- Unresolved unique guest names: game 111, Android libc++ 111.
+- Mali-G31 GLES3.2, SDL2 controls, ALSA and Start+Select remain working.
+- No commercial game code has been executed.
+
+Phase 7 adds `src/android_log_provider.c`, a typed implementation of:
+`__android_log_write`, `__android_log_print`,
+`__android_log_vprint`, `__android_log_assert` and
+`android_set_abort_message`, writing bounded, sanitized messages to
+the PortMaster test log (stderr). The assert function intentionally
+calls `abort()`; it is **never** invoked by the synthetic self-test.
+
+The new `--logging-plan libMyGame.so libc++_shared.so` mode performs
+all prior *non-executing* relocations and also binds only these named
+Android NDK logging functions. It additionally checks for exported
+`JNI_OnLoad`, `cocos_android_app_init`, and three Cocos2d
+`Cocos2dxRenderer` JNI entrypoints, reporting
+`present=0|1 invoked=0`. **This does not initialize Java/JNI or
+execute the Cocos2d-x engine.**
+
+The separate `--logging-selftest` mode invokes the logging wrappers
+with synthetic strings only; it does **not** invoke imported code.
+
+### Running phase 7 on your R36S
+
+Download the artifact named `Lenneth-Android-R36S-ARM64-Phase7`
+from the Actions workflow in this branch; extract the inner
+`lenneth-r36s-phase7-arm64.zip` to the ROM partition as usual.
+Keep only your own locally sourced `libMyGame.so` and
+`libc++_shared.so` in `ports/lenneth-r36s/`. No asset CPKs are
+required for this test. Run Ports → Lenneth Android R36S Test.
+Send only `ports/lenneth-r36s/lenneth-r36s.log`.
+
+Look for `[lenneth android-log] PHASE7=PASS`,
+`host_log_slots=...`, and `[lenneth JNI] bridge=...`.
+Existing video, ALSA, controls and exit tests remain intact.
+
+### Remaining critical runtime work
+
+Bionic pthread mutex/cond/tls object representation, signal and libc
+ABI glue, C++ constructors and exception lifecycle, JNI fake runtime,
+OpenSL ES/CRIWARE audio and correct executable ELF permissions. The
+launch of the original ARM64 binary is **not** enabled yet. No claim
+is made about playable performance, licensing behavior, or movie/codec
+support.
