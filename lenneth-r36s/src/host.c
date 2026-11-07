@@ -1,9 +1,12 @@
+#define _GNU_SOURCE
 #include <SDL.h>
 #include <GLES2/gl2.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
 
 /* Independent Linux ARM64 bootstrap. Does not run the commercial game. */
 int lenneth_elf_audit(const char *filename);
@@ -13,6 +16,7 @@ int lenneth_host_plan(const char *game_path,const char *cxx_path);
 int lenneth_portable_plan(const char *game_path,const char *cxx_path);
 int lenneth_asset_plan(const char *game_path,const char *cxx_path);
 int lenneth_logging_plan(const char *game_path,const char *cxx_path);
+int lenneth_batch_plan(const char *game_path,const char *cxx_path);
 int lenneth_android_log_selftest(void);
 int lenneth_asset_selftest(const char *root,const char *relative_path);
 
@@ -255,8 +259,76 @@ static int video_probe(int seconds) {
     SDL_Quit();
     return 0;
 }
+/* Phase 8: one invocation, all provider groups, one ELF mapping pass.
+ * Fixture self-tests call only our own shim code, never the game.
+ * --batch-headless is used by ARM64 GitHub CI; --batch includes GLES2,
+ * ALSA and gamepad probes on the physical R36S. */
+static int run_batch(const char *game_path,const char *cxx_path,int display) {
+    printf("[lenneth suite] BEGIN mode=%s "
+           "game=private_libMyGame cxx=private_libc++_shared\n",
+           display?"R36S-HARDWARE":"CI-HEADLESS");
+    printf("[lenneth suite] phase3-7 providers are resolved TOGETHER; "
+           "commercial ELF code stays NON-EXECUTABLE\n");
+    char temporary[]="/tmp/lenneth-fixture-XXXXXX";
+    char fixture_path[512]={0};
+    int asset_rc=9;
+    char *dir=mkdtemp(temporary);
+    if(!dir) {
+        fprintf(stderr,"[lenneth suite] mkdtemp: %s\n",strerror(errno));
+    } else {
+        snprintf(fixture_path,sizeof(fixture_path),"%s/fixture.txt",dir);
+        FILE *file=fopen(fixture_path,"wb");
+        if(file) {
+            const char fixture[]="Lenneth independent fixture; no game files.\n";
+            size_t n=fwrite(fixture,1,sizeof(fixture)-1,file);
+            int write_ok=(n==sizeof(fixture)-1);
+            if(fclose(file)!=0)write_ok=0;
+            if(write_ok)
+                asset_rc=lenneth_asset_selftest(dir,"fixture.txt");
+        }
+    }
+    if(fixture_path[0])unlink(fixture_path);
+    if(dir)rmdir(dir);
+    int log_rc=lenneth_android_log_selftest();
+    /* One mapping and relocation pass for GLES/EGL + portable C +
+       Android AAssetManager + logcat + JNI symbol report. */
+    int link_rc=lenneth_batch_plan(game_path,cxx_path);
+    int video_rc=display?video_probe(15):0;
+    int ok=(asset_rc==0 && log_rc==0 && link_rc==0 && video_rc==0);
+    FILE *sum=fopen("lenneth-suite-summary.txt","w");
+    if(sum) {
+        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 8)\n");
+        fprintf(sum,"Assets fixture: %s\n",asset_rc==0?"PASS":"FAIL");
+        fprintf(sum,"Android logging fixture: %s\n",log_rc==0?"PASS":"FAIL");
+        fprintf(sum,"ARM64 ELF/link/JNI inventory: %s\n",link_rc==0?"PASS":"FAIL");
+        fprintf(sum,"GLES2/ALSA/gamepad environment: %s\n",
+                !display?"SKIPPED_CI":(video_rc==0?"PASS":"FAIL"));
+        fprintf(sum,"Complete unresolved ABI names: lenneth-blockers.tsv\n");
+        fprintf(sum,"Game engine invoked: NO\n");
+        fprintf(sum,"Overall diagnostic: %s\n",ok?"PASS":"FAIL");
+        if(fclose(sum)!=0){
+            fprintf(stderr,"[lenneth suite] summary write failed\n");
+            ok=0;
+        }
+    } else {
+        fprintf(stderr,"[lenneth suite] summary cannot be written: %s\n",
+                strerror(errno));
+        ok=0;
+    }
+    printf("[lenneth suite] FINAL=%s asset=%d logging=%d linking=%d "
+           "video_audio_input=%s summary=lenneth-suite-summary.txt "
+           "blockers=lenneth-blockers.tsv engine_executed=NO\n",
+           ok?"PASS":"FAIL",asset_rc,log_rc,link_rc,
+           !display?"CI_SKIP":(video_rc==0?"PASS":"FAIL"));
+    return ok?0:12;
+}
+
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
+    if(argc==4 && strcmp(argv[1],"--batch")==0)
+        return run_batch(argv[2],argv[3],1);
+    if(argc==4 && strcmp(argv[1],"--batch-headless")==0)
+        return run_batch(argv[2],argv[3],0);
     if(argc==3 && strcmp(argv[1],"--inspect")==0)
         return lenneth_elf_audit(argv[2]);
     if(argc==3 && strcmp(argv[1],"--preflight")==0)
@@ -283,6 +355,6 @@ int main(int argc,char **argv) {
         }
         return video_probe(duration);
     }
-    fprintf(stderr,"Usage: %s --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
+    fprintf(stderr,"Usage: %s --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
     return 2;
 }
