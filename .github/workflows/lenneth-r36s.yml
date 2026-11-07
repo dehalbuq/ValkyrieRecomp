@@ -607,6 +607,8 @@ jobs:
           #include <stdint.h>
           #include <wchar.h>
           extern unsigned char __sF[];
+          /* Force a real wcrtomb ELF import, bypassing glibc fortify inlining. */
+          static size_t (*volatile test_wcrtomb)(char *, wchar_t, mbstate_t *)=wcrtomb;
           extern void *newlocale(int, const char *, void *);
           extern void freelocale(void *);
           extern void *uselocale(void *);
@@ -627,7 +629,7 @@ jobs:
                 (uselocale(locale)!=0)+(int)strtoll_l("17",&end,10,locale)+
                 (int)strtoull_l("2",&end,10,locale)+
                 (int)strtold_l("1.0",&end,locale)+
-                (int)mbrtowc(&wc,"A",1,0)+(int)wcrtomb(buf,L'A',0);
+                (int)mbrtowc(&wc,"A",1,0)+(int)test_wcrtomb(buf,L'A',0);
             freelocale(locale);
             return result+marker;
           }
@@ -636,7 +638,7 @@ jobs:
           mkdir -p assets saves
           ./build-lenneth/lenneth-probe --batch-headless /tmp/phase18_game.so /tmp/phase3_partner.so | tee lenneth-phase18-batch.txt
           grep -q 'PHASE18_LINK=PASS' lenneth-phase18-batch.txt
-          grep -q 'locale18_abi_shims=' lenneth-phase18-batch.txt
+          grep -Eq 'locale18_abi_shims=[1-9][0-9]*' lenneth-phase18-batch.txt
           grep -q 'Phase18 isolated Bionic locale/UTF8 fixture: PASS' lenneth-suite-summary.txt
           grep -q 'FINAL=PASS' lenneth-phase18-batch.txt
           grep -q '__sF' lenneth-blockers.tsv
