@@ -38,6 +38,20 @@ mkdir -p "$DEST/disc/Disc1" "$DEST/disc/Disc2" "$DEST/saves" "$DEST/lib"
 cp -f "$BIN" "$DEST/ValkyrieRecomp"
 cp -f game.toml game_options.toml r36s/ValkyrieRecomp.sh "$DEST/"
 cp -f r36s/PortMaster/ValkyrieRecomp.sh "$ROOT/build-r36s-package/ports/ValkyrieRecomp.sh"
+# Separate GPU capability bench; runs on R36S firmware EGL/Mali, NOT
+# during game. No DuckStation code or copyrighted game data included.
+echo "[R36S-Docker] Building GLES2/3 native GPU probe..."
+cc -O2 -std=c11 -Wall -Wextra \
+    $(sdl2-config --cflags) r36s/gles-gpu-probe.c \
+    -o "$DEST/gles-gpu-probe" \
+    $(sdl2-config --libs) -lGLESv2 -lm
+file "$DEST/gles-gpu-probe"
+readelf -h "$DEST/gles-gpu-probe" | grep -q 'Machine:.*AArch64'
+cp -f "r36s/PortMaster/Valkyrie GPU Diagnostic.sh" \
+    "$ROOT/build-r36s-package/ports/Valkyrie GPU Diagnostic.sh"
+chmod +x "$DEST/gles-gpu-probe" \
+    "$ROOT/build-r36s-package/ports/Valkyrie GPU Diagnostic.sh"
+
 chmod +x "$DEST/ValkyrieRecomp" "$DEST/ValkyrieRecomp.sh" \
     "$ROOT/build-r36s-package/ports/ValkyrieRecomp.sh"
 if [ -d "$ROOT/build-r36s-docker/bios" ]; then
