@@ -1,6 +1,7 @@
 #ifndef LENNETH_ASSET_PROVIDER_H
 #define LENNETH_ASSET_PROVIDER_H
 #include <stdint.h>
+#include <stddef.h>
 #include <sys/types.h>
 /* Android NDK AAsset API bridge for an EXTRACTED, local private assets/ folder.
  * This is NOT an APK/ZIP reader, virtual Android Java object, or JNI runtime.
