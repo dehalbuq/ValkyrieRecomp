@@ -365,8 +365,8 @@ int lenneth_locale18_selftest(void){
     if(guest_swprintf(wide,16,L"n=%d",42)!=4 ||
        wcscmp(wide,L"n=42"))ok=0;
     if(guest_mbtowc(&wide[0],"\xc3\xa9",2)!=2 || wide[0]!=0xe9)ok=0;
-    if(!guest_localeconv() || strcmp(guest_localeconv()->decimal_point,".") ||
-       guest_localeconv()->frac_digits!=CHAR_MAX)ok=0;
+    if(!compat_localeconv() || strcmp(compat_localeconv()->decimal_point,".") ||
+       compat_localeconv()->frac_digits!=CHAR_MAX)ok=0;
     char *end=NULL;
     if(guest_strtoll_l("-123x",&end,10,a)!=-123 || *end!='x')ok=0;
     if(guest_strtoull_l("45x",&end,10,a)!=45 || *end!='x')ok=0;
