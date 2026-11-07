@@ -78,8 +78,8 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
           (cd package && zip -qr ../lenneth-r36s-phase2-arm64.zip ports)
-          sha256sum lenneth-r36s-phase1-arm64.zip
-          ls -lh lenneth-r36s-phase1-arm64.zip
+          sha256sum lenneth-r36s-phase2-arm64.zip
+          ls -lh lenneth-r36s-phase2-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
