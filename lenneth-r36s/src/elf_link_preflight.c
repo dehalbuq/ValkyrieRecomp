@@ -630,6 +630,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
            " host_thread_slots=%" PRIu64 " host_fortify_slots=%" PRIu64
            " host_cxx_slots=%" PRIu64 " host_fd_slots=%" PRIu64
            " host_unicode_slots=%" PRIu64 " host_data_slots=%" PRIu64
+           " host_dl_slots=%" PRIu64 " host_saveops_slots=%" PRIu64
            " unsupported=%" PRIu64 "\n",
            cs.relocations,cs.relative,cs.internal,cs.partner,
            cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.host_logging,cs.host_threads,cs.host_fortify,cs.host_cxx_lifecycle,cs.host_fd,cs.host_unicode,cs.host_data,cs.host_dl,cs.host_saveops,cs.unsupported);
