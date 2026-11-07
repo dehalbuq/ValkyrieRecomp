@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 11: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 12: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 11 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 12 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -20,6 +20,7 @@ echo "[lenneth suite] This does NOT execute commercial game code."
 echo "[lenneth suite] Experimental pthread guest-object adapters and extra libc/libm functions enabled in this batch."
 echo "[lenneth suite] Additional bounded Bionic FORTIFY/errno adapters and synthetic self-test enabled."
 echo "[lenneth suite] C++ lifecycle + independent synthetic ARM64 executable loader test enabled."
+echo "[lenneth suite] Phase12: sandboxed POSIX fd, raw UTF-32 and process-local stack guard tests enabled."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
@@ -58,6 +59,9 @@ done
 
 if [ ! -d assets ]; then
     mkdir -p assets 2>/dev/null || echo "[lenneth asset] cannot create optional empty assets folder"
+fi
+if [ ! -d saves ]; then
+    mkdir -m 700 -p saves 2>/dev/null || echo "[lenneth fd] cannot create app-private saves directory"
 fi
 rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv"
 echo "[lenneth synthetic] Testing explicitly marked original synthetic ARM64 modules."
