@@ -46,7 +46,11 @@ void lenneth_portable_close(void) {
     memset(&hp,0,sizeof(hp));
 }
 
-/* Keep list finite and individually audited. These use only numeric, basic
+/* Keep list finite and individually audited. C function signatures must
+ * be checked before guest execution; this diagnostic only binds slots.
+ * Extra phase9 POSIX functions use standard timespec/timeval and varargs;
+ * none of these addresses have been invoked by the original Android motor.
+ * These use only numeric, basic
  * string, buffer or allocator ABI types. No Bionic C structs or pointers
  * to private libc state can cross this boundary.
  *
@@ -66,7 +70,15 @@ static const char *const vetted_functions[]={
     "strcmp", "strcpy", "strdup", "strlen", "strncat", "strncmp",
     "strncpy", "strrchr", "strstr", "strtod", "strtof",
     "strtol", "strtoll", "strtoul", "strtoull",
-    "tan", "tanf", "tolower", "toupper"
+    "tan", "tanf", "tolower", "toupper",
+    /* Phase 9: C numeric/time/ctype ABI with only plain C/POSIX types.
+     * Still DO NOT bind FILE*, pthread objects, locale structs or guest paths. */
+    "log10", "log10f", "sincos", "sincosf", "div", "qsort",
+    "rand", "srand", "abort", "exit",
+    "isalpha", "isalnum", "isspace", "islower", "isupper", "isxdigit",
+    "time", "gettimeofday", "clock_gettime", "nanosleep",
+    "usleep", "sched_yield", "strerror", "strcasecmp",
+    "snprintf", "vsnprintf", "sprintf", "vsprintf"
 };
 static int vetted(const char *name) {
     for(size_t i=0;i<sizeof(vetted_functions)/sizeof(vetted_functions[0]);i++)
