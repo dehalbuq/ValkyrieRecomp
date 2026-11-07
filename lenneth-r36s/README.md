@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–13, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
+**Experimental bootstrap — phases 1–14, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -846,3 +846,78 @@ environment. None of these are safely replaceable with glibc
 by matching their symbol names. Original commercial game code is
 still NOT executed. This remains an ABI and R36S hardware diagnostic,
 not a playable game port.
+
+## Phase 14: typed opaque Bionic FILE proxy (not the legacy __sF ABI)
+
+The owner's real dArkOSRE R36S phase-13 multitest reports:
+- \`Overall diagnostic: PASS\` and actual execution of only our
+  independent synthetic AArch64 pair: \`R36S_EXECUTION=PASS\` (return 77).
+- Graphics GLES2/EGL, ALSA, gamepad, asset, threads, FORTIFY, C++,
+  sandboxed fd, Unicode, Bionic stack guard and restricted guest dl
+  probes all passed.
+- The commercial Android libraries remained mapped **non-executable**.
+- **327** externally bound Android-to-Linux relocation sites (not
+  320: 97 GLES/EGL +104 portable libc/libm +11 AAsset +4 logging
+  +44 pthread +17 FORTIFY +6 C++ +9 fd +27 Unicode +1 stack guard
+  +4 restricted libdl +3 save operations).
+- **76 unresolved relocation sites**, **75 module-specific import
+  entries** across two Android ELF files, corresponding to **67
+  unique symbol names**. 70 of those 75 entries are libc/stdio/locale/
+  loader; 5 are OpenSL ES.
+
+We verified the original Android Bionic stdio headers against:
+https://android.googlesource.com/platform/bionic/+/main/libc/include/stdio.h .
+It is **not safe** to pass a Linux glibc FILE* directly to old Android
+libraries. Further, the two ELF files import Bionic's legacy \`__sF\`
+FILE data array, which depends on precise private structure layout
+and ABI-version assumptions.
+
+### New implementation
+
+\`src/bionic_stdio.c\` independently implements **15 API-mediated
+stream operations** using private finite token slots whose host-side
+\`FILE*\` objects never cross into the imported guest code: \`fopen\`,
+\`fclose\`, \`fread\`, \`fwrite\`, \`fseek\`, \`ftell\`, \`ferror\`,
+\`clearerr\`, \`fflush\`, \`fputc\`, \`getc\`, \`ungetc\`,
+\`fileno\`, \`vfprintf\`, and \`fprintf\`. File opens use the existing
+\`openat(O_NOFOLLOW)\` path sandbox: \`assets/\` is read-only and
+\`saves/\` is app-private. No arbitrary absolute paths are allowed.
+The guest pointer is a distinct token and is never reinterpreted as
+the internal host glibc FILE layout.
+
+\`src/portable_provider.c\` adds the primitive standard-C-only
+\`printf\`, \`sscanf\`, and \`vsscanf\` import candidates, while
+\`src/bionic_fortify.c\` adds a bounds-checked \`__vsprintf_chk\`
+wrapper. These changes also have synthetic unit tests, and the
+standalone batch continues to run every regression from phases 1–13.
+
+**Critical limitations:**
+- \`__sF\` is explicitly **NOT** mapped or fabricated; the real game
+  and Android libc++ import this symbol and may dereference it.
+- Android-compatible \`fdopen\`, direct Bionic FILE field access,
+  platform-specific \`struct stat\`, longjmp/setjmp and locale
+  internals are NOT solved.
+- \`OpenSL ES\` engine/interface vtables and \`SL_IID_*\` data symbols
+  are NOT mapped, so the game audio engine cannot start.
+- A synthetic \`FILE\` fixture passing does not prove the full old
+  Bionic ABI works during actual game/JNI initialization. No original
+  game instructions are executed; live-game launch is disabled.
+
+### One physical R36S test
+
+Download the GitHub Actions artifact
+\`Lenneth-Android-R36S-ARM64-Multitest-Phase14\`, unpack its nested
+\`lenneth-r36s-multitest-phase14-arm64.zip\` preserving
+\`ports/\`, and keep the two original Android private libraries
+\`libMyGame.so\` and \`libc++_shared.so\` in
+\`ports/lenneth-r36s/\`. No game assets or APK are included.
+Launch Ports → **Lenneth Android R36S Test** once and send only
+\`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\`.
+
+Expect \`[lenneth stdio] SELFTEST=PASS\` and
+\`[lenneth stdio] PHASE14_LINK=PASS\`, plus
+\`[lenneth synthetic] R36S_EXECUTION=PASS\` and
+\`[lenneth suite] FINAL=PASS\`. The new blocker TSV should still
+contain the legacy Bionic \`__sF\` object and five OpenSL ES imports;
+do not interpret missing \`FILE\` function names as a runnable
+Android application.
