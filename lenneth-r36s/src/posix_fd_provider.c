@@ -104,6 +104,9 @@ static int guest_open(const char *path,int flags,...) {
     if(root==assets_fd && writing){errno=EROFS;return -1;}
     return open_beneath(root,rel,flags,mode);
 }
+int lenneth_fd_open_guest_path(const char *path,int flags,mode_t mode) {
+    return guest_open(path,flags,(int)mode);
+}
 static ssize_t guest_read(int fd,void *dst,size_t n){return read(fd,dst,n);}
 static ssize_t guest_write(int fd,const void *src,size_t n){return write(fd,src,n);}
 static int guest_close(int fd){return close(fd);}
