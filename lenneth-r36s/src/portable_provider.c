@@ -78,7 +78,8 @@ static const char *const vetted_functions[]={
     "isalpha", "isalnum", "isspace", "islower", "isupper", "isxdigit",
     "time", "gettimeofday", "clock_gettime", "nanosleep",
     "usleep", "sched_yield", "strerror", "strcasecmp",
-    "snprintf", "vsnprintf", "sprintf", "vsprintf"
+    "snprintf", "vsnprintf", "sprintf", "vsprintf",
+    "printf", "sscanf", "vsscanf"
 };
 static int vetted(const char *name) {
     for(size_t i=0;i<sizeof(vetted_functions)/sizeof(vetted_functions[0]);i++)
