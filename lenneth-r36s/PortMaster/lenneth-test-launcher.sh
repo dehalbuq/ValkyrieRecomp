@@ -1,15 +1,23 @@
 #!/bin/bash
-# Native Lenneth ARM64 compatibility BOOTSTRAP, not the commercial game.
+# Lenneth R36S phase 8: ONE full diagnostic run, compact reports.
+# No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
 cd "$root" || exit 1
+
 log="$root/lenneth-r36s.log"
 if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
-exec >> "$log" 2>&1
-echo "=== Lenneth Android R36S PHASE 7 $(date -Iseconds 2>/dev/null || date) ==="
+# Previous sessions were appended to the same log (over 100 KB).
+# Keep the immediately previous one as a backup and start a clean file.
+if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
+exec > "$log" 2>&1
+
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 8 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
-echo "This binary is a native EGL/GLES2/gamepad/audio/ELF diagnostic, NOT the commercial game."
+echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
+echo "[lenneth suite] This does NOT execute commercial game code."
+
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
     if [ -f "$pm/control.txt" ]; then
@@ -29,48 +37,63 @@ if [ -z "$SDL_VIDEODRIVER" ]; then export SDL_VIDEODRIVER=kmsdrm; fi
 if [ -z "$SDL_VIDEO_FORCE_EGL" ]; then export SDL_VIDEO_FORCE_EGL=1; fi
 if [ -z "$SDL_AUDIODRIVER" ]; then export SDL_AUDIODRIVER=alsa; fi
 export SDL_RENDER_SCALE_QUALITY=0
-echo "SDL: video=$SDL_VIDEODRIVER audio=$SDL_AUDIODRIVER"
+echo "SDL video=$SDL_VIDEODRIVER audio=$SDL_AUDIODRIVER"
+
 if [ ! -x ./lenneth-probe ]; then
     echo "ERROR: lenneth-probe executable missing"
     exit 127
 fi
-for so in libMyGame.so lib/arm64-v8a/libMyGame.so libc++_shared.so lib/arm64-v8a/libc++_shared.so libRMS.so lib/arm64-v8a/libRMS.so; do
-    if [ -f "$so" ]; then
-        echo "Native ELF metadata audit: $so"
-        ./lenneth-probe --inspect "$so" || echo "WARNING: ELF audit failed for $so"
-        echo "ELF mapped load / relative relocations: $so"
-        ./lenneth-probe --preflight "$so" || echo "WARNING: read-only ELF mapping preflight failed for $so"
-    fi
-done
+
 game_so=""
 cxx_so=""
-for target in libMyGame.so lib/arm64-v8a/libMyGame.so; do
-    if [ -f "$target" ]; then game_so="$target"; break; fi
+for candidate in libMyGame.so lib/arm64-v8a/libMyGame.so; do
+    if [ -f "$candidate" ]; then game_so="$candidate"; break; fi
 done
-for target in libc++_shared.so lib/arm64-v8a/libc++_shared.so; do
-    if [ -f "$target" ]; then cxx_so="$target"; break; fi
+for candidate in libc++_shared.so lib/arm64-v8a/libc++_shared.so; do
+    if [ -f "$candidate" ]; then cxx_so="$candidate"; break; fi
 done
-if [ -n "$game_so" ] && [ -n "$cxx_so" ]; then
-    echo "Phase3 two-module relocation/link plan: $game_so + $cxx_so"
-    ./lenneth-probe --link-plan "$game_so" "$cxx_so" || echo "WARNING: phase3 two-library linking preflight failed"
-    echo "Phase4 native Linux GLES2/EGL provider relocation plan: $game_so + $cxx_so"
-    ./lenneth-probe --host-plan "$game_so" "$cxx_so" || echo "WARNING: phase4 host GLES/EGL linking preflight failed"
-    echo "Phase5 conservative libc/libm import provider plan: $game_so + $cxx_so"
-    ./lenneth-probe --portable-plan "$game_so" "$cxx_so" || echo "WARNING: phase5 native libc/libm preflight failed"
-    if [ ! -d assets ]; then
-        mkdir -p assets 2>/dev/null || echo "[lenneth asset] cannot create optional local assets folder"
-    fi
-    echo "Phase6 Android AAssetManager read-only native import plan: $game_so + $cxx_so"
-    ./lenneth-probe --asset-plan "$game_so" "$cxx_so" || echo "WARNING: phase6 AAssetManager link preflight failed"
-    echo "Phase7 Android logging and JNI bridge export audit: $game_so + $cxx_so"
-    ./lenneth-probe --logging-plan "$game_so" "$cxx_so" || echo "WARNING: phase7 logging/JNI preflight failed"
-else
-    echo "[lenneth link] skipped: requires original libMyGame.so and libc++_shared.so; no commercial binary is bundled"
+
+if [ ! -d assets ]; then
+    mkdir -p assets 2>/dev/null || echo "[lenneth asset] cannot create optional empty assets folder"
 fi
-echo "Entering GLES2 hardware test (automatically quits after 30 seconds)."
-echo "Exit earlier by START+SELECT held 2.5s, then A; or press F10."
-./lenneth-probe --video --seconds 30
-rc=$?
-echo "Result: $rc. Log: $log"
+rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv"
+
+if [ -n "$game_so" ] && [ -n "$cxx_so" ]; then
+    if [ "$LENNETH_FULL_DIAG" = 1 ]; then
+        echo "Optional verbose legacy audit enabled"
+        for so in "$game_so" "$cxx_so"; do
+            ./lenneth-probe --inspect "$so"
+            ./lenneth-probe --preflight "$so"
+        done
+        ./lenneth-probe --link-plan "$game_so" "$cxx_so"
+        ./lenneth-probe --host-plan "$game_so" "$cxx_so"
+        ./lenneth-probe --portable-plan "$game_so" "$cxx_so"
+        ./lenneth-probe --asset-plan "$game_so" "$cxx_so"
+        ./lenneth-probe --logging-plan "$game_so" "$cxx_so"
+    fi
+    echo "[lenneth suite] Running all default tests in one process."
+    ./lenneth-probe --batch "$game_so" "$cxx_so"
+    rc=$?
+else
+    echo "[lenneth suite] Cannot link private Android libraries: libMyGame.so or libc++_shared.so missing"
+    ./lenneth-probe --video --seconds 15
+    rc=10
+fi
+
+# Package only three text reports. Never include libraries or game assets.
+if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ]; then
+    if command -v zip >/dev/null 2>&1; then
+        (cd "$root" && zip -q -j "lenneth-r36s-diagnostics.zip" \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv") \
+          || echo "[lenneth suite] zip report packaging failed"
+        echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.zip"
+    elif command -v tar >/dev/null 2>&1; then
+        (cd "$root" && tar -czf "lenneth-r36s-diagnostics.tar.gz" \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv") \
+          || echo "[lenneth suite] tar report packaging failed"
+        echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.tar.gz"
+    fi
+fi
+echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv"
 if declare -F pm_finish >/dev/null; then pm_finish; fi
 exit "$rc"
