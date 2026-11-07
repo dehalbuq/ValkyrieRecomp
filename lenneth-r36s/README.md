@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–10, with one-run multitest. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–11, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -621,3 +621,88 @@ FILE* and file-backed asset access, Bionic-specific dynamic linking and
 OpenSL ES before the first controlled executable-map experiment. These
 will need real executable/ABI testing on independent synthetic Android
 ARM64 libraries, not just symbolic relocation counts.
+
+## Phase 11: verified AArch64 synthetic execution and C++ lifecycle ABI
+
+The physical R36S phase-10 report confirmed \`FINAL=PASS\`:
+- Guest library host-import binding sites: **277 total** —
+  97 GLES/EGL, 104 audited libc/libm, 11 AAsset, 4 Android logging,
+  44 pthread, and 17 FORTIFY.
+- **124** still-unresolved guest import entries (53 in \`libMyGame\`,
+  71 in \`libc++_shared\`), representing **113 distinct symbol names**.
+- Remaining: **114** Bionic/libc/libm/dynamic-linker entries,
+  **5** C++ ABI destructor-lifecycle entries, **5** OpenSL ES entries.
+- Original private ARM64 game and C++ libraries still mapped RW
+  **NON-EXECUTABLE** and remain uncalled. JNI exports were found but
+  not invoked.
+
+### The new combined improvements
+
+1. C++ destructor registration: the three exported Itanium ABI
+   interfaces \`__cxa_atexit\`, \`__cxa_finalize\` and
+   \`__cxa_thread_atexit_impl\` now have independent, privately named
+   Linux-backed wrapper functions. The global bounded destructor list
+   and per-thread cleanup undergo independent synthetic LIFO tests.
+   The source is in \`src/cxx_runtime.c\`.
+2. During normal \`--batch\` inspection, the guest ELF relocator maps
+   these three C++ ABI symbols alongside our earlier graphics,
+   FORTIFY, asset, pthread and logging providers. The original
+   proprietary code is **still not executed**.
+3. A separate, tightly gated \`--execute-synthetic\` mode implements
+   the first **actual execution of ARM64 code by our loader**. It
+   accepts ONLY TWO independently authored test libraries with the
+   exact synthetic marker, no DT_NEEDED, no constructors, no
+   unresolved imports and no writable+executable segments. It then
+   applies ELF64 relocations, invalidates the AArch64 instruction
+   cache, changes segment page permissions with \`mprotect\` to
+   enforce W^X, and calls the test's known \`JNI_OnLoad\` export.
+   The export calls the other test library's function and is
+   expected to return the integer **77**.
+4. GitHub Actions on a **native Ubuntu ARM64 runner** has already
+   executed this purely synthetic \`JNI_OnLoad\` successfully with
+   \`[lenneth synthetic] EXECUTION=PASS\`. Negative tests confirm
+   that libraries without matching markers are refused.
+5. The CI release ZIP contains both self-authored synthetic mock
+   libraries in \`ports/lenneth-r36s/mock/\`, so the dArkOSRE R36S
+   can independently verify the same dynamic ELF code execution
+   and record \`[lenneth synthetic] R36S_EXECUTION=PASS\`.
+   No commercial binaries, CPK files or APK contents are bundled.
+
+### Phase-11 R36S test instructions
+
+1. Download the GitHub Actions artifact
+   \`Lenneth-Android-R36S-ARM64-Multitest-Phase11\` from
+   this branch's workflow. Unzip its inner
+   \`lenneth-r36s-multitest-phase11-arm64.zip\` into the ROM partition,
+   preserving \`ports/\`.
+2. Keep your legally obtained \`libMyGame.so\` and
+   \`libc++_shared.so\` in \`ports/lenneth-r36s/\`.
+3. Launch **Ports → Lenneth Android R36S Test** once. The launcher
+   first calls the two synthetic test libraries, then executes
+   the full original game-library **non-executable** linker batch,
+   asset/logger/threads/FORTIFY/C++ fixture tests, and GLES2/ALSA/
+   gamepad hardware checks.
+4. Share only \`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\`.
+   The ZIP contains three **text reports only**, never the private
+   commercial libraries. Its summary distinguishes synthetic
+   code execution from private game code.
+
+### Still required for actual game startup
+
+The synthetic execution is a prerequisite, **not** an Android
+runtime. Do not pass the original \`libMyGame.so\` to
+\`--execute-synthetic\`; its missing marker and dynamic dependencies
+cause an explicit refusal. We still need a Bionic FILE* adapter
+(including \`__sF\` data objects), dynamic linker namespace and
+\`dl_iterate_phdr\`, \`setjmp/longjmp\` ABI, OpenSL ES/CRIWARE audio,
+actual JNI emulation and Android data-path mappings. Original game's
+constructors, TLS and callback lifecycle have not been validated
+under executable mappings.
+
+The C++ ABI matching signatures and destructor order were checked
+against upstream Android Bionic
+https://android.googlesource.com/platform/bionic/+/master/libc/bionic/atexit.cpp
+and
+https://android.googlesource.com/platform/bionic/+/main/libc/bionic/__cxa_thread_atexit_impl.cpp .
+The adapters are independently written and carry the project's
+MIT license.
