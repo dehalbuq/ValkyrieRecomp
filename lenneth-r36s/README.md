@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–7. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–8, now with one-run multitest. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -409,3 +409,72 @@ OpenSL ES/CRIWARE audio and correct executable ELF permissions. The
 launch of the original ARM64 binary is **not** enabled yet. No claim
 is made about playable performance, licensing behavior, or movie/codec
 support.
+
+## Phase 8: fast ALL-IN-ONE testing
+
+After the physical R36S phase-7 test the owner requested fewer manual
+build/test iterations. The log confirms all four Android-logging slots
+were bound (three in \`libMyGame.so\`, one in \`libc++_shared.so\`), in
+addition to 97 GLES2/EGL, 70 audited libc/libm and 11 AAsset references.
+At phase 7 there are 108 unresolved imported symbol names in the game
+and 110 in Android libc++, counted per library. All real game
+instructions have remained **unexecuted**.
+
+Rather than loading and remapping the two original ARM64 libraries in
+five separate processes (phases 3, 4, 5, 6 and 7), the new
+\`lenneth-probe --batch libMyGame.so libc++_shared.so\`:
+
+- Maps both ARM64 ELF libraries **only once** in non-executable memory.
+- Binds cross-library references, native GLES2/EGL and restricted
+  libc/libm C functions, plus our local AAsset and Android log shims.
+- Lists the original Cocos2d/JNI *exports*, without invoking them.
+- Writes **all still-unresolved guest symbol names** to
+  \`lenneth-blockers.tsv\`, grouped by module and ABI category with a
+  weak/strong binding flag (no binary bytes, pointers or addresses).
+- Runs read-only AAsset functionality on a **synthetic temporary
+  fixture** and Android logging wrapper self-tests using a synthetic
+  message.
+- Then tests SDL2 KMSDRM GPU, ALSA audio device and joystick on the R36S
+  for 15 seconds (previously 30). The overlay still allows
+  held Start+Select then A to exit early.
+- Creates \`lenneth-suite-summary.txt\` and one short
+  \`lenneth-r36s.log\` (prior log backed up).
+- Tries to package **only these three TEXT files** into
+  \`lenneth-r36s-diagnostics.zip\` (tar.gz fallback if zip is absent).
+  No private Android libraries or commercial CPK assets are included.
+
+**Simple user workflow**
+
+1. Download GitHub Action artifact named
+   \`Lenneth-Android-R36S-ARM64-Multitest-Phase8\`.
+2. Extract its inner \`lenneth-r36s-multitest-phase8-arm64.zip\` into
+   the existing ROM partition, preserving \`ports/\`.
+3. Preserve your own private \`libMyGame.so\` and
+   \`libc++_shared.so\` in \`ports/lenneth-r36s/\`. For this
+   preflight, the 900 MB commercial game assets are not needed.
+4. Run **Ports → Lenneth Android R36S Test** **one time**.
+5. Send only \`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\` to
+   help guide several ABI changes at once. If ZIP tools are missing,
+   send the three .txt/.tsv/.log files separately.
+
+The previous detailed tools \`--link-plan\`, \`--host-plan\`,
+\`--portable-plan\`, \`--asset-plan\` and \`--logging-plan\`
+remain available. To run all those verbose legacy modes, set
+\`LENNETH_FULL_DIAG=1\` in the launcher environment. The **default**
+is much shorter and performs only one full guest mapping/link pass.
+
+For GitHub CI (no GPU display), \`--batch-headless\` runs the same
+non-executing symbol resolution and shim self-tests using **synthetic
+ELF fixtures** and skips the physical display/audio/gamepad portion.
+An ARM64 CI success does not replace a real dArkOSRE R36S test.
+
+### Important compatibility limits
+
+A fully executable Android compatibility runtime has **not** been
+implemented. Resolving symbol addresses is not proof that the
+Android Bionic and Linux glibc calling conventions/objects match.
+Android pthread mutex/cond and TLS, JNI object models, OpenSL ES
+and other system APIs remain unresolved. Future development can
+now prioritize and validate multiple independent ABI adapters using
+the complete blocker inventory in one iteration, with targeted
+unit-tests in CI before a combined R36S physical run.
