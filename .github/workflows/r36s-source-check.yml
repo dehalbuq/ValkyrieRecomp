@@ -11,6 +11,8 @@ on:
       - 'CMakeLists.txt'
       - 'r36s/build-*.sh'
       - 'r36s/docker/Dockerfile'
+      - 'r36s/patches/**'
+      - 'r36s/apply-psxrecomp-patches.sh'
       - '.github/workflows/r36s-source-check.yml'
   push:
     branches:
@@ -38,6 +40,14 @@ jobs:
           test -f psxrecomp/runtime/include/gpu_gl_renderer.h
           test -f psxrecomp/runtime/include/gpu_render.h
           git -C psxrecomp rev-parse HEAD
+      - name: Verify pinned C11 patch applies and is idempotent
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash r36s/apply-psxrecomp-patches.sh
+          bash r36s/apply-psxrecomp-patches.sh
+          grep -A1 '^retry_candidates:' psxrecomp/runtime/src/overlay_loader.c | grep -q '^    ;'
+          git -C psxrecomp diff --check
       - name: Compile software GL adapter (host syntax only)
         shell: bash
         run: |
@@ -50,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           bash -n r36s/build-r36s.sh r36s/build-docker.sh \
-                  r36s/build-arm64-in-docker.sh
+                  r36s/build-arm64-in-docker.sh r36s/apply-psxrecomp-patches.sh
           sh -n r36s/ValkyrieRecomp.sh \
                 r36s/PortMaster/ValkyrieRecomp.sh \
                 r36s/collect-system-info.sh
