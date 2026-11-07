@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–9, with one-run multitest. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–10, with one-run multitest. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -553,3 +553,71 @@ Expected new lines (counts depend on actual firmware/libraries):
 The release still does NOT contain game content. The owner must keep
 commercial libraries on their own hardware. This is a development
 diagnostic, not a playable PortMaster release.
+
+## Phase 10: multiple fortified Bionic ABI adapters in the same batch
+
+The physical dArkOSRE phase-9 ZIP supplied by the owner shows:
+
+- **Overall diagnostic: PASS** (asset fixture, logging, pthread/cond/
+  TLS, linking/JNI inventory, GLES2, ALSA and gamepad).
+- Guest link sites bound: **97 GLES/EGL + 104 audited libc/libm +
+  11 AAsset + 4 Android logging + 44 pthread = 260 sites**.
+- **141 unresolved import entries**, 63 from the original game and 78
+  from Android libc++; 124 unique names after cross-module deduplication.
+- Remaining categories: 131 Bionic/libc/libm/dl, 5 OpenSL ES,
+  5 C++ ABI. The phase-8 comparison was 218 unresolved entries.
+- The JNI inventory reports JNI_OnLoad and Cocos2dxRenderer nativeInit/
+  nativeRender/touch entrypoints exported, **not invoked**. The original
+  Android game engine has **never** executed under our loader.
+
+Phase 10 adds \`src/bionic_fortify.c\` / \`.h\`: independently written,
+typed Linux wrappers for eleven named Android Bionic functions:
+
+\`__strlen_chk\`, \`__memcpy_chk\`, \`__memmove_chk\`, \`__strcat_chk\`,
+\`__strncpy_chk\`, \`__strchr_chk\`, \`__read_chk\`, \`__vsnprintf_chk\`,
+\`__open_2\`, \`__stack_chk_fail\` and \`__errno\`.
+
+The signatures were compared against Android Open Source Project
+[Bionic's fortify implementation](https://android.googlesource.com/platform/bionic/+/5f112cd7564f092c93c877e526d269ec68d47922/libc/bionic/fortify.cpp)
+and [errno declarations](https://android.googlesource.com/platform/bionic/+/main/libc/include/errno.h).
+The independently written wrappers abort on invalid bounds as the
+real fortified API does, rather than ignoring a fortified check.
+
+These are **non-executing import-address bindings**, and our unit-test
+calls them only with synthetic inputs. The following complex ABIs are
+NOT declared supported: Bionic FILE* and \`__sF\`, glibc FILE stream
+conversion, Android dynamic library namespace, \`dl_iterate_phdr\`,
+\`setjmp/longjmp\`, complex locale/stdio state, C++ destructor registration,
+OpenSL ES engine and full Java/JNI. Bionic \`__stack_chk_guard\` is an
+imported **data object**, and is deliberately not mapped as a function.
+
+The single-launch Phase-10 R36S batch performs *all* previous tests
+and adds a direct FORTIFY/errno fixture and the eleven optional
+import-symbol candidates, using one guest ELF mapping cycle.
+
+**Installation:** download \`Lenneth-Android-R36S-ARM64-Multitest-Phase10\`
+from the GitHub Actions workflow and extract its inner
+\`lenneth-r36s-multitest-phase10-arm64.zip\` to the ROM partition.
+Keep your original \`libMyGame.so\` and \`libc++_shared.so\` private
+in \`ports/lenneth-r36s/\`. No game data is included or uploaded.
+Launch **Ports → Lenneth Android R36S Test** once, then send only
+\`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\`.
+
+Look for:
+\`\`\`
+[lenneth fortify] SELFTEST=PASS ...
+[lenneth fortify] PHASE10_LINK=PASS ...
+[lenneth suite] FINAL=PASS ...
+\`\`\`
+
+Important: success proves only *independent diagnostic fixtures and
+relocation-address resolution*. It does **not** validate execution of
+original game code with this combined Android/Linux ABI.
+
+### After Phase 10
+
+Focus on isolated C++ destruction/constructor lifecycle, safe libc
+FILE* and file-backed asset access, Bionic-specific dynamic linking and
+OpenSL ES before the first controlled executable-map experiment. These
+will need real executable/ABI testing on independent synthetic Android
+ARM64 libraries, not just symbolic relocation counts.
