@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 15: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 16: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 15 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 16 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -23,7 +23,8 @@ echo "[lenneth suite] C++ lifecycle + independent synthetic ARM64 executable loa
 echo "[lenneth suite] Phase12: sandboxed POSIX fd, raw UTF-32 and process-local stack guard tests enabled."
 echo "[lenneth suite] Phase13: allowlisted GLES/EGL guest dl* handles, save-only rename/mkdir/remove, and scalar wchar operations."
 echo "[lenneth suite] Phase14: opaque FILE proxy diagnostics; legacy Bionic __sF remains unresolved."
-echo "[lenneth suite] Phase15: typed OpenSL ES engine/interface/queue ABI fixture; PCM audio backend is NOT implemented."
+echo "[lenneth suite] Phase15: OpenSL ES ABI remains synthetic (guest PCM not wired)."
+echo "[lenneth suite] Phase16: native SDL2/ALSA PCM playback fixture tests real queue drainage."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do

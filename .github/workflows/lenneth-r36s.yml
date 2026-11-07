@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase15 OpenSL ES typed ABI multi-suite
+name: Lenneth Android R36S - ARM64 phase16 SDL PCM plus ABI multi-suite
 
 on:
   workflow_dispatch:
@@ -540,6 +540,18 @@ jobs:
             exit 1
           fi
 
+      - name: Phase16 SDL PCM output fixture using dummy driver
+        env:
+          SDL_AUDIODRIVER: dummy
+        run: |
+          ./build-lenneth/lenneth-probe --pcm-selftest | tee lenneth-phase16-pcm-test.txt
+          grep -q 'PCM_SDL_SELFTEST=PASS' lenneth-phase16-pcm-test.txt
+          grep -q 'audio_driver=dummy' lenneth-phase16-pcm-test.txt
+          grep -q 'device=opened' lenneth-phase16-pcm-test.txt
+          grep -q 'buffers_queued=2' lenneth-phase16-pcm-test.txt
+          grep -q 'queue_drained=1' lenneth-phase16-pcm-test.txt
+          grep -q 'commercial_execution=NO' lenneth-phase16-pcm-test.txt
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -554,13 +566,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase15-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase15-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase15-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase16-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase16-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase16-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase15
-          path: lenneth-r36s-multitest-phase15-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase16
+          path: lenneth-r36s-multitest-phase16-arm64.zip
           if-no-files-found: error
           retention-days: 14

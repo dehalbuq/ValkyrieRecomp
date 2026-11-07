@@ -1002,3 +1002,10 @@ object layout, Android ELF dynamic linker introspection, and full
 Java/JNI initialization. Reducing an unresolved-symbol list does
 not mean that commercial code is safe to run. Original game code
 remains **non-executable** in the production diagnostic loader.
+
+
+## Phase 16 — SDL2/ALSA PCM output preflight
+
+The launcher now runs a standalone original PCM fixture during its 15-second GLES2 and input probe. It queues two stereo signed-16 44.1 kHz quarter-second tones into SDL2; on R36S the audio driver is normally ALSA. The fixture checks both buffers were queued and that the SDL queue fully drains, with a finite timeout. The generated ZIP includes `PCM_SDL_SELFTEST` and `PHASE16_PCM` markers in the log. CI uses `SDL_AUDIODRIVER=dummy ./lenneth-probe --pcm-selftest` to exercise the same mechanics without a sound card.
+
+**Limitations:** Queue-draining cannot prove the tone was audible. This is a separate native SDL PCM fixture, NOT yet a fully connected OpenSL ES-to-SDL queue adapter. The commercial Android game library is not executed. Existing synthetic OpenSL ABI/linker/ELF tests and the single three-report diagnostic ZIP remain in place.

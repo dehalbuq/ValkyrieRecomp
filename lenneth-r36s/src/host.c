@@ -27,6 +27,7 @@ int lenneth_batch_dl_plan(const char *game_path,const char *cxx_path);
 int lenneth_batch_stdio_plan(const char *game_path,const char *cxx_path);
 int lenneth_batch_opensl_plan(const char *game_path,const char *cxx_path);
 int lenneth_opensl_selftest(void);
+int lenneth_pcm_sdl_selftest(void);
 int lenneth_bionic_stdio_selftest(void);
 int lenneth_ndk_dl_selftest(void);
 int lenneth_saveops_selftest(void);
@@ -199,6 +200,9 @@ static int video_probe(int seconds) {
     fprintf(stdout,"[lenneth audio] driver=%s device=%u %s\n",
        SDL_GetCurrentAudioDriver()?SDL_GetCurrentAudioDriver():"(none)",
        (unsigned)audio,audio?"opened":SDL_GetError());
+    if(audio)SDL_CloseAudioDevice(audio);
+    int pcm_rc=lenneth_pcm_sdl_selftest();
+    fprintf(stdout,"[lenneth audio] PHASE16_PCM=%s\n",pcm_rc==0?"PASS":"FAIL");
     log_memory();
     fprintf(stdout,"[lenneth probe] Renderer/controls only. Commercial Android engine NOT loaded.\n");
     fprintf(stdout,"[lenneth probe] Hold START+SELECT 2500ms; A=exit; B=resume. Timeout=%d s.\n",seconds);
@@ -269,13 +273,12 @@ static int video_probe(int seconds) {
         }
         SDL_Delay(16);
     }
-    if(audio)SDL_CloseAudioDevice(audio);
     if(pad)SDL_GameControllerClose(pad);
     else if(raw)SDL_JoystickClose(raw);
     glDeleteProgram(shader);
     SDL_GL_DeleteContext(glctx);SDL_DestroyWindow(win);
     SDL_Quit();
-    return 0;
+    return pcm_rc?6:0;
 }
 /* Phase 8: one invocation, all provider groups, one ELF mapping pass.
  * Fixture self-tests call only our own shim code, never the game.
@@ -325,7 +328,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && link_rc==0 && video_rc==0);
     FILE *sum=fopen("lenneth-suite-summary.txt","w");
     if(sum) {
-        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 15)\n");
+        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 16)\n");
         fprintf(sum,"Assets fixture: %s\n",asset_rc==0?"PASS":"FAIL");
         fprintf(sum,"Android logging fixture: %s\n",log_rc==0?"PASS":"FAIL");
         fprintf(sum,"Bionic pthread/cond/TLS synthetic fixtures: %s\n",thread_rc==0?"PASS":"FAIL");
@@ -339,6 +342,8 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"Experimental opaque Bionic FILE API synthetic fixture: %s\n",stdio_rc==0?"PASS":"FAIL");
         fprintf(sum,"OpenSL ES engine/PCM queue/IID ABI synthetic fixture: %s\n",opensl_rc==0?"PASS":"FAIL");
         fprintf(sum,"OpenSL actual PCM sound output: NOT_IMPLEMENTED\n");
+        fprintf(sum,"SDL2 standalone PCM hardware fixture: %s\n",
+                !display?"SKIPPED_IN_HEADLESS_BATCH":(video_rc==0?"PASS":"FAIL"));
         fprintf(sum,"ARM64 ELF/link/JNI inventory: %s\n",link_rc==0?"PASS":"FAIL");
         fprintf(sum,"GLES2/ALSA/gamepad environment: %s\n",
                 !display?"SKIPPED_CI":(video_rc==0?"PASS":"FAIL"));
@@ -364,6 +369,8 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
 
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
+    if(argc==2 && strcmp(argv[1],"--pcm-selftest")==0)
+        return lenneth_pcm_sdl_selftest();
     if(argc==2 && strcmp(argv[1],"--opensl-selftest")==0)
         return lenneth_opensl_selftest();
     if(argc==2 && strcmp(argv[1],"--stdio-selftest")==0)
@@ -416,6 +423,6 @@ int main(int argc,char **argv) {
         }
         return video_probe(duration);
     }
-    fprintf(stderr,"Usage: %s --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
+    fprintf(stderr,"Usage: %s --pcm-selftest | --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
     return 2;
 }
