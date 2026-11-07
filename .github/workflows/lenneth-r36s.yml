@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase6 Android asset provider preflight
+name: Lenneth Android R36S - ARM64 phase7 logging JNI preflight
 
 on:
   workflow_dispatch:
@@ -171,6 +171,39 @@ jobs:
             exit 1
           fi
 
+      - name: Phase7 test NDK logging adapter and JNI symbol inventory
+        run: |
+          ./build-lenneth/lenneth-probe --logging-selftest | tee lenneth-logging-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-logging-fixture.txt
+          cat > /tmp/lenneth_logging_mock.c <<'EOF'
+          extern int __android_log_write(int, const char*, const char*);
+          extern int __android_log_print(int, const char*, const char*, ...);
+          extern void android_set_abort_message(const char *);
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *reserved) {
+            (void)vm;(void)reserved;
+            android_set_abort_message("fixture only");
+            return __android_log_write(4,"probe","synthetic")+
+                   __android_log_print(3,"probe","fixture %d",42);
+          }
+          __attribute__((visibility("default"))) void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit(void *env,void *cls,int w,int h) {
+            (void)env;(void)cls;(void)w;(void)h;
+          }
+          __attribute__((visibility("default"))) void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeRender(void *env,void *cls) {
+            (void)env;(void)cls;
+          }
+          EOF
+          cc -shared -fPIC -O2 -o /tmp/phase7_game.so /tmp/lenneth_logging_mock.c
+          mkdir -p assets
+          ./build-lenneth/lenneth-probe --logging-plan /tmp/phase7_game.so /tmp/phase3_partner.so | tee lenneth-logging-plan.txt
+          grep -q 'PHASE7=PASS' lenneth-logging-plan.txt
+          grep -Eq 'host_log_slots=[1-9][0-9]*' lenneth-logging-plan.txt
+          grep -q 'bridge=JNI_OnLoad present=1 invoked=0' lenneth-logging-plan.txt
+          grep -q 'Cocos2dxRenderer_nativeInit present=1 invoked=0' lenneth-logging-plan.txt
+          if ./build-lenneth/lenneth-probe --logging-plan /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid ELF was accepted by logging preflight"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -183,13 +216,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-phase6-arm64.zip ports)
-          sha256sum lenneth-r36s-phase6-arm64.zip
-          ls -lh lenneth-r36s-phase6-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-phase7-arm64.zip ports)
+          sha256sum lenneth-r36s-phase7-arm64.zip
+          ls -lh lenneth-r36s-phase7-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Phase6
-          path: lenneth-r36s-phase6-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Phase7
+          path: lenneth-r36s-phase7-arm64.zip
           if-no-files-found: error
           retention-days: 14
