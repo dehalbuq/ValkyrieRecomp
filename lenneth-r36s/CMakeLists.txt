@@ -13,7 +13,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
 find_library(GLESV2_LIB NAMES GLESv2 REQUIRED)
 
-add_executable(lenneth-probe src/host.c src/elf_audit.c src/elf_map_preflight.c src/elf_link_preflight.c)
+add_executable(lenneth-probe src/host.c src/elf_audit.c src/elf_map_preflight.c src/elf_link_preflight.c src/portable_provider.c)
 target_link_libraries(lenneth-probe PRIVATE PkgConfig::SDL2 "${GLESV2_LIB}" "${CMAKE_DL_LIBS}")
 target_compile_options(lenneth-probe PRIVATE
     -Wall -Wextra -Wpedantic -O2 -fno-strict-aliasing)
