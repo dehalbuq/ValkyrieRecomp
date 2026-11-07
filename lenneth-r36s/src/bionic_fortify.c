@@ -69,6 +69,19 @@ static int guest_vsnprintf_chk(char *dst,size_t max,int flags,
     if(max>cap)fail_size("__vsnprintf_chk");
     return vsnprintf(dst,max,fmt,va);
 }
+/* Bionic __vsprintf_chk uses a destination object-size bound.
+ * Use bounded formatting rather than silently accepting overflows. */
+static int guest_vsprintf_chk(char *dst,int flags,size_t cap,
+                             const char *fmt,va_list ap){
+    (void)flags;
+    if(!dst||!fmt||cap==0)fail_size("__vsprintf_chk");
+    va_list copy;
+    va_copy(copy,ap);
+    int len=vsnprintf(dst,cap,fmt,copy);
+    va_end(copy);
+    if(len<0 || (size_t)len>=cap)fail_size("__vsprintf_chk");
+    return len;
+}
 static int guest_open_2(const char *name,int flags){
     if(flags&O_CREAT)fail_size("__open_2 (O_CREAT lacks mode)");
 #ifdef O_TMPFILE
@@ -94,6 +107,7 @@ static const Symbol symbols[]={
     EXPORT("__strchr_chk",guest_strchr_chk),
     EXPORT("__read_chk",guest_read_chk),
     EXPORT("__vsnprintf_chk",guest_vsnprintf_chk),
+    EXPORT("__vsprintf_chk",guest_vsprintf_chk),
     EXPORT("__open_2",guest_open_2),
     EXPORT("__stack_chk_fail",guest_stack_chk_fail),
     EXPORT("__errno",guest_errno)
@@ -117,6 +131,12 @@ static int format_test(char *dst,size_t n,int flags,size_t cap,
     va_end(va);
     return result;
 }
+static int run_vsprintf_fixture(char *dst,int flags,size_t cap,
+                               const char *fmt,...){
+    va_list args;va_start(args,fmt);
+    int ret=guest_vsprintf_chk(dst,flags,cap,fmt,args);
+    va_end(args);return ret;
+}
 int lenneth_bionic_fortify_selftest(void){
     int ok=1;
     const char *sample="Lenneth";
@@ -131,6 +151,8 @@ int lenneth_bionic_fortify_selftest(void){
     if(guest_strncpy_chk(buffer,sample,7,sizeof(buffer))!=buffer ||
        memcmp(buffer,sample,7)!=0)ok=0;
     if(guest_strchr_chk(sample,'n',8)!=sample+2)ok=0;
+    if(run_vsprintf_fixture(buffer,0,sizeof(buffer),"%s-%d","SYN",64)!=6 ||
+       strcmp(buffer,"SYN-64")!=0)ok=0;
     if(format_test(buffer,sizeof(buffer),0,sizeof(buffer),"%s-%d","ARM64",32)!=8 ||
        strcmp(buffer,"ARM64-32")!=0)ok=0;
     int pipes[2];
