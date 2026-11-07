@@ -8,6 +8,11 @@ on:
   pull_request:
     paths:
       - 'r36s/gpu_gl_stub.c'
+      - 'r36s/r36s_exit_menu.cpp'
+      - 'r36s/r36s_exit_menu.h'
+      - 'r36s/ValkyrieRecomp.sh'
+      - 'r36s/PortMaster/ValkyrieRecomp.sh'
+      - 'game.toml'
       - 'CMakeLists.txt'
       - 'r36s/build-*.sh'
       - 'r36s/docker/Dockerfile'
@@ -19,6 +24,13 @@ on:
       - 'r36s/arm64-sdl2-bootstrap'
     paths:
       - 'r36s/gpu_gl_stub.c'
+      - 'r36s/r36s_exit_menu.cpp'
+      - 'r36s/r36s_exit_menu.h'
+      - 'r36s/ValkyrieRecomp.sh'
+      - 'r36s/PortMaster/ValkyrieRecomp.sh'
+      - 'game.toml'
+      - 'r36s/apply-psxrecomp-patches.sh'
+      - 'r36s/patches/**'
       - 'CMakeLists.txt'
       - '.github/workflows/r36s-source-check.yml'
 
@@ -33,6 +45,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Install SDL2 developer headers for menu syntax test
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libsdl2-dev pkg-config
       - name: Validate submodule pin and headers
         shell: bash
         run: |
@@ -58,15 +74,27 @@ jobs:
           gcc -std=c11 -fsyntax-only -Wall -Wextra -Werror \
               -Ipsxrecomp/runtime/include r36s/gpu_gl_stub.c
 
+      - name: Compile R36S in-game exit menu (SDL2, no game assets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -fsyntax-only -Wall -Wextra -Werror \
+              $(pkg-config --cflags sdl2) r36s/r36s_exit_menu.cpp
+          python3 -m py_compile r36s/patches/r36s-main-hooks.py
+          grep -q 'r36s_exit_menu_tick();' psxrecomp/runtime/src/main.cpp
+          grep -q 'r36s_exit_menu_draw(sdl_renderer' psxrecomp/runtime/src/main.cpp
+          grep -q 'r36s_install_fallback_gamepad_maps();' psxrecomp/runtime/src/main.cpp
+          grep -q 'default_p1_device = "auto"' game.toml
+          grep -q 'r36s_exit_menu.cpp' CMakeLists.txt
+
       - name: Check launcher and build script syntax
         shell: bash
         run: |
           set -euo pipefail
           bash -n r36s/build-r36s.sh r36s/build-docker.sh \
                   r36s/build-arm64-in-docker.sh r36s/apply-psxrecomp-patches.sh
-          sh -n r36s/ValkyrieRecomp.sh \
-                r36s/PortMaster/ValkyrieRecomp.sh \
-                r36s/collect-system-info.sh
+          bash -n r36s/ValkyrieRecomp.sh
+          sh -n r36s/PortMaster/ValkyrieRecomp.sh r36s/collect-system-info.sh
           python3 -m json.tool CMakePresets.json >/dev/null
       - name: Verify intended backend selection
         shell: bash
