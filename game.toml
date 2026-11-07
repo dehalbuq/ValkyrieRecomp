@@ -66,6 +66,9 @@ auto_screen_x = true
 
 [controller]
 default_mode = "digital"
+# Handheld Release previously defaulted to keyboard; use the R36S built-in pad.
+default_p1_device = "auto"
+default_p2_device = "none"
 
 # Online mount gate: digests + track count + optional TOC fingerprint
 # (see docs/NETPLAY.md).
