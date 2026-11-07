@@ -99,7 +99,8 @@ jobs:
           set -euo pipefail
           bash -n r36s/build-r36s.sh r36s/build-docker.sh \
                   r36s/build-arm64-in-docker.sh r36s/apply-psxrecomp-patches.sh
-          bash -n r36s/PortMaster/"Valkyrie GPU Diagnostic.sh"\n          bash -n r36s/ValkyrieRecomp.sh
+          bash -n "r36s/PortMaster/Valkyrie GPU Diagnostic.sh"
+          bash -n r36s/ValkyrieRecomp.sh
           sh -n r36s/PortMaster/ValkyrieRecomp.sh r36s/collect-system-info.sh
           python3 -m json.tool CMakePresets.json >/dev/null
       - name: Verify intended backend selection
