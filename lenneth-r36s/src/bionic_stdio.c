@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <sys/stat.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
