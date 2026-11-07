@@ -9,6 +9,8 @@ on:
     paths:
       - 'r36s/gpu_gl_stub.c'
       - 'r36s/r36s_exit_menu.cpp'
+      - 'r36s/gles-gpu-probe.c'
+      - 'r36s/PortMaster/Valkyrie GPU Diagnostic.sh'
       - 'r36s/r36s_exit_menu.h'
       - 'r36s/ValkyrieRecomp.sh'
       - 'r36s/PortMaster/ValkyrieRecomp.sh'
@@ -48,7 +50,7 @@ jobs:
       - name: Install SDL2 developer headers for menu syntax test
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libsdl2-dev pkg-config
+          sudo apt-get install -y --no-install-recommends libsdl2-dev libgles2-mesa-dev pkg-config
       - name: Validate submodule pin and headers
         shell: bash
         run: |
@@ -80,6 +82,10 @@ jobs:
           set -euo pipefail
           g++ -std=c++17 -fsyntax-only -Wall -Wextra -Werror \
               $(pkg-config --cflags sdl2) r36s/r36s_exit_menu.cpp
+          gcc -std=c11 -fsyntax-only -Wall -Wextra -Werror \
+              $(pkg-config --cflags sdl2) r36s/gles-gpu-probe.c
+          grep -q 'effective_fps=' r36s/r36s_exit_menu.cpp
+          grep -q 'PSX_IDLE_SKIP=' r36s/ValkyrieRecomp.sh
           python3 -m py_compile r36s/patches/r36s-main-hooks.py
           grep -q 'r36s_exit_menu_tick();' psxrecomp/runtime/src/main.cpp
           grep -q 'r36s_exit_menu_draw(sdl_renderer' psxrecomp/runtime/src/main.cpp
@@ -93,7 +99,7 @@ jobs:
           set -euo pipefail
           bash -n r36s/build-r36s.sh r36s/build-docker.sh \
                   r36s/build-arm64-in-docker.sh r36s/apply-psxrecomp-patches.sh
-          bash -n r36s/ValkyrieRecomp.sh
+          bash -n r36s/PortMaster/"Valkyrie GPU Diagnostic.sh"\n          bash -n r36s/ValkyrieRecomp.sh
           sh -n r36s/PortMaster/ValkyrieRecomp.sh r36s/collect-system-info.sh
           python3 -m json.tool CMakePresets.json >/dev/null
       - name: Verify intended backend selection
