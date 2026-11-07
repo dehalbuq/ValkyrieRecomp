@@ -371,8 +371,9 @@ int lenneth_locale18_selftest(void){
     if(guest_strtoll_l("-123x",&end,10,a)!=-123 || *end!='x')ok=0;
     if(guest_strtoull_l("45x",&end,10,a)!=45 || *end!='x')ok=0;
     if(guest_strtold_l("1.5x",&end,a)!=1.5L || *end!='x')ok=0;
+    if(guest_uselocale((void*)(intptr_t)-1)!=a)ok=0;
     if(!guest_setlocale(6,"C") || current_utf8() || guest_mbtowc(NULL,"\xc3\xa9",2)!=-1)ok=0;
-    if(guest_uselocale(b)!=a || current_utf8()!=0)ok=0;
+    if(guest_uselocale(b)!=(void*)(intptr_t)-1 || current_utf8()!=0)ok=0;
     if(guest_uselocale(a)!=b || current_utf8()!=1)ok=0;
     if(!guest_setlocale(6,"C.UTF-8") || guest_uselocale((void*)(intptr_t)-1)!=a ||
        !current_utf8())ok=0;
