@@ -19,6 +19,8 @@ int lenneth_logging_plan(const char *game_path,const char *cxx_path);
 int lenneth_batch_plan(const char *game_path,const char *cxx_path);
 int lenneth_batch_thread_plan(const char *game_path,const char *cxx_path);
 int lenneth_bionic_thread_selftest(void);
+int lenneth_bionic_fortify_selftest(void);
+int lenneth_batch_fortify_plan(const char *game_path,const char *cxx_path);
 int lenneth_android_log_selftest(void);
 int lenneth_asset_selftest(const char *root,const char *relative_path);
 
@@ -293,17 +295,19 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     if(dir)rmdir(dir);
     int log_rc=lenneth_android_log_selftest();
     int thread_rc=lenneth_bionic_thread_selftest();
+    int fortify_rc=lenneth_bionic_fortify_selftest();
     /* One mapping and relocation pass for GLES/EGL + portable C +
        Android AAssetManager + logcat + JNI symbol report. */
-    int link_rc=lenneth_batch_thread_plan(game_path,cxx_path);
+    int link_rc=lenneth_batch_fortify_plan(game_path,cxx_path);
     int video_rc=display?video_probe(15):0;
-    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && link_rc==0 && video_rc==0);
+    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && link_rc==0 && video_rc==0);
     FILE *sum=fopen("lenneth-suite-summary.txt","w");
     if(sum) {
-        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 9)\n");
+        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 10)\n");
         fprintf(sum,"Assets fixture: %s\n",asset_rc==0?"PASS":"FAIL");
         fprintf(sum,"Android logging fixture: %s\n",log_rc==0?"PASS":"FAIL");
         fprintf(sum,"Bionic pthread/cond/TLS synthetic fixtures: %s\n",thread_rc==0?"PASS":"FAIL");
+        fprintf(sum,"Bionic FORTIFY/errno synthetic fixtures: %s\n",fortify_rc==0?"PASS":"FAIL");
         fprintf(sum,"ARM64 ELF/link/JNI inventory: %s\n",link_rc==0?"PASS":"FAIL");
         fprintf(sum,"GLES2/ALSA/gamepad environment: %s\n",
                 !display?"SKIPPED_CI":(video_rc==0?"PASS":"FAIL"));
@@ -319,16 +323,18 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
                 strerror(errno));
         ok=0;
     }
-    printf("[lenneth suite] FINAL=%s asset=%d logging=%d threads=%d linking=%d "
+    printf("[lenneth suite] FINAL=%s asset=%d logging=%d threads=%d fortify=%d linking=%d "
            "video_audio_input=%s summary=lenneth-suite-summary.txt "
            "blockers=lenneth-blockers.tsv engine_executed=NO\n",
-           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,link_rc,
+           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,fortify_rc,link_rc,
            !display?"CI_SKIP":(video_rc==0?"PASS":"FAIL"));
     return ok?0:12;
 }
 
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
+    if(argc==2 && strcmp(argv[1],"--fortify-selftest")==0)
+        return lenneth_bionic_fortify_selftest();
     if(argc==2 && strcmp(argv[1],"--threads-selftest")==0)
         return lenneth_bionic_thread_selftest();
     if(argc==4 && strcmp(argv[1],"--batch")==0)
@@ -361,6 +367,6 @@ int main(int argc,char **argv) {
         }
         return video_probe(duration);
     }
-    fprintf(stderr,"Usage: %s --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
+    fprintf(stderr,"Usage: %s --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
     return 2;
 }
