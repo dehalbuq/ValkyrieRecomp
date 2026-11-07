@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include "portable_provider.h"
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
 typedef struct {
@@ -33,7 +34,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, host_gles, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, host_portable, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -344,6 +345,9 @@ static int relocate_table(Module *m,Module *partner,
                 st->partner++;
             } else if(graphics_lookup(name,&value)) {
                 st->host_gles++;
+            } else if(ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
+                      lenneth_portable_lookup(name,&value)) {
+                st->host_portable++;
             } else {
                 st->unresolved++;
                 continue;
@@ -374,6 +378,8 @@ static size_t unresolved_import_names(const Module *m,
         uint64_t addr;
         if(find_export(partner,name,&addr))continue;
         if(graphics_lookup(name,&addr))continue;
+        if(ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
+           lenneth_portable_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -387,11 +393,12 @@ static size_t unresolved_import_names(const Module *m,
     return n;
 }
 int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
-                              int with_host_graphics) {
+                              int provider_mode) {
     Module game={0},cxx={0};
     LinkStats gs={0},cs={0};
     int rc=3;
-    if(with_host_graphics)provider_init();
+    if(provider_mode>=1)provider_init();
+    if(provider_mode>=2)lenneth_portable_open();
     if(!load_file(&cxx,"libc++_shared",cxx_path) ||
        !load_file(&game,"libMyGame",game_path)) {
         fprintf(stderr,"[lenneth link] load failed; stopping without calling anything\n");
@@ -407,20 +414,30 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     printf("[lenneth link] libMyGame: relocs=%" PRIu64
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_libcxx=%" PRIu64 " pending_host=%" PRIu64
-           " host_gles_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
+           " host_gles_slots=%" PRIu64 " host_portable_slots=%" PRIu64
+           " unsupported=%" PRIu64 "\n",
            gs.relocations,gs.relative,gs.internal,gs.partner,
-           gs.unresolved,gs.host_gles,gs.unsupported);
+           gs.unresolved,gs.host_gles,gs.host_portable,gs.unsupported);
     printf("[lenneth link] libc++_shared: relocs=%" PRIu64
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_game=%" PRIu64 " pending_host=%" PRIu64
-           " host_gles_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
+           " host_gles_slots=%" PRIu64 " host_portable_slots=%" PRIu64
+           " unsupported=%" PRIu64 "\n",
            cs.relocations,cs.relative,cs.internal,cs.partner,
-           cs.unresolved,cs.host_gles,cs.unsupported);
+           cs.unresolved,cs.host_gles,cs.host_portable,cs.unsupported);
     size_t missing_game=unresolved_import_names(&game,&cxx);
     size_t missing_cxx=unresolved_import_names(&cxx,&game);
     printf("[lenneth link] unique_pending game=%zu cxx=%zu\n",
            missing_game,missing_cxx);
-    if(with_host_graphics)
+    if(provider_mode==2)
+        printf("[lenneth portable] PHASE5=PASS graphics_slots=%" PRIu64
+               " libc_libm_slots=%" PRIu64 " host_pending_sites=%" PRIu64
+               " distinct_pending=%zu; Bionic pthread/JNI/asset/audio NOT ready; "
+               "engine NOT executed\n",
+               gs.host_gles+cs.host_gles,
+               gs.host_portable+cs.host_portable,
+               gs.unresolved+cs.unresolved,missing_game+missing_cxx);
+    else if(provider_mode==1)
         printf("[lenneth host] PHASE4=PASS graphics_resolved_slots=%" PRIu64
                " unresolved_host_sites=%" PRIu64
                " unresolved_host_unique=%zu; Android ABI still pending; "
@@ -434,7 +451,8 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
 cleanup:
     unload(&game);
     unload(&cxx);
-    if(with_host_graphics)provider_close();
+    if(provider_mode>=2)lenneth_portable_close();
+    if(provider_mode>=1)provider_close();
     return rc;
 }
 int lenneth_link_preflight(const char *game_path,const char *cxx_path) {
@@ -442,4 +460,7 @@ int lenneth_link_preflight(const char *game_path,const char *cxx_path) {
 }
 int lenneth_host_plan(const char *game_path,const char *cxx_path) {
     return lenneth_link_preflight_mode(game_path,cxx_path,1);
+}
+int lenneth_portable_plan(const char *game_path,const char *cxx_path) {
+    return lenneth_link_preflight_mode(game_path,cxx_path,2);
 }
