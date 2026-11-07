@@ -47,6 +47,9 @@ jobs:
           bash r36s/apply-psxrecomp-patches.sh
           bash r36s/apply-psxrecomp-patches.sh
           grep -A1 '^retry_candidates:' psxrecomp/runtime/src/overlay_loader.c | grep -q '^    ;'
+          # The R36S profile must NOT carry libGLX or libOpenGL links:
+          grep -q 'if(NOT VALKYRIE_R36S)' psxrecomp/runtime/runtime.cmake
+          grep -q 'target_link_libraries(psx-runtime PRIVATE Threads::Threads)' CMakeLists.txt
           git -C psxrecomp diff --check
       - name: Compile software GL adapter (host syntax only)
         shell: bash
