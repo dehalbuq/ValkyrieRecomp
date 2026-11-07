@@ -33,6 +33,60 @@ static int read_index(const char *name) {
     return end != v && *end == '\0' && n >= 0 && n < 256 ? (int)n : -1;
 }
 
+/* The PSXRecomp release defaults P1 to keyboard and ignores raw joysticks
+ * that SDL cannot classify as GameController. Honour PortMaster mappings first.
+ * Only add a conservative fallback for an unmapped device with enough keys.
+ * Device-specific overrides remain available via SDL_GAMECONTROLLERCONFIG. */
+void r36s_install_fallback_gamepad_maps(void) {
+    const char *disable = getenv("VALKYRIE_AUTOMAP");
+    if (disable && disable[0] == '0') return;
+    const int n = SDL_NumJoysticks();
+    fprintf(stdout, "[R36S input] SDL_NumJoysticks=%d controllerconfig=%s\n",
+            n, getenv("SDL_GAMECONTROLLERCONFIG") ? "provided" : "not provided");
+    for (int i = 0; i < n; ++i) {
+        const char *name = SDL_JoystickNameForIndex(i);
+        if (SDL_IsGameController(i)) {
+            fprintf(stdout, "[R36S input] mapped game controller %d: %s\n",
+                    i, name ? name : "(unnamed)");
+            continue;
+        }
+        SDL_Joystick *j = SDL_JoystickOpen(i);
+        if (!j) {
+            fprintf(stderr, "[R36S input] SDL_JoystickOpen(%d) failed: %s\n",
+                    i, SDL_GetError());
+            continue;
+        }
+        const int buttons = SDL_JoystickNumButtons(j);
+        const int axes = SDL_JoystickNumAxes(j);
+        const int hats = SDL_JoystickNumHats(j);
+        fprintf(stdout, "[R36S input] unmapped raw joystick %d (%s): buttons=%d axes=%d hats=%d\n",
+                i, name ? name : "(unnamed)", buttons, axes, hats);
+        if (buttons >= 8 && axes >= 2) {
+            const int back = buttons >= 10 ? 8 : 6;
+            const int start = buttons >= 10 ? 9 : 7;
+            char guid[40] = {0}, mapping[600] = {0}, dpad[140] = {0};
+            SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(i), guid, sizeof(guid));
+            if (hats > 0) {
+                snprintf(dpad, sizeof(dpad),
+                         "dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,");
+            } else if (buttons >= 14) {
+                snprintf(dpad, sizeof(dpad),
+                         "dpup:b10,dpdown:b11,dpleft:b12,dpright:b13,");
+            }
+            snprintf(mapping, sizeof(mapping),
+                     "%s,R36S Generic Fallback,a:b0,b:b1,x:b2,y:b3,"
+                     "back:b%d,start:b%d,leftshoulder:b4,rightshoulder:b5,"
+                     "leftx:a0,lefty:a1,%splatform:Linux,",
+                     guid, back, start, dpad);
+            const int added = SDL_GameControllerAddMapping(mapping);
+            fprintf(stdout, "[R36S input] fallback mapping for joystick %d => %d (%s)\n",
+                    i, added, added < 0 ? SDL_GetError() : "ok");
+        }
+        SDL_JoystickClose(j);
+    }
+    fflush(stdout);
+}
+
 static void refresh_controller(void) {
     if (s_joy && SDL_JoystickGetAttached(s_joy)) return;
     if (s_pad) { SDL_GameControllerClose(s_pad); s_pad = NULL; }
