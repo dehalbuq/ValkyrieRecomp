@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 22: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 23: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 22 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 23 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -30,7 +30,8 @@ echo "[lenneth suite] Phase18: Bionic locale and incremental UTF-8 regression te
 echo "[lenneth suite] Phase19: Bionic stat/fstat and sysconf regression tests retained."
 echo "[lenneth suite] Phase20: sandboxed fdopen, priority and syscall regression tests retained."
 echo "[lenneth suite] Phase21: guest-only ELF program headers and shell denial retained."
-echo "[lenneth suite] Phase22: Bionic legacy __sF[3] 152-byte data bridge and AArch64 setjmp ABI audit; nonlocal jumps NOT MAPPED."
+echo "[lenneth suite] Phase22: Bionic legacy __sF[3] data and historical jump ABI audit retained."
+echo "[lenneth suite] Phase23: early-Bionic 256-byte native AArch64 nonlocal jump fixture (registers, stack, signals, malformed context)."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
