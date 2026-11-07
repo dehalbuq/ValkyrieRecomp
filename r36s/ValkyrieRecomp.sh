@@ -52,6 +52,12 @@ export PSX_DEV_INPUT="${PSX_DEV_INPUT:-1}"
 # decrement extension without game-specific sites. A/B with IDLE_SKIP=0.
 export PSX_IDLE_SKIP="${VALKYRIE_IDLE_SKIP:-1}"
 export PSX_IDLE_SKIP_EXT=0
+# A missed KMSDRM vsync adds a whole refresh interval to a slow guest frame.
+# Keep PSXRecomp's wall-clock frame limiter to prevent accelerated gameplay.
+export PSX_VSYNC="${VALKYRIE_VSYNC:-0}"
+export PSX_FRAME_INTERPOLATION=0
+echo "[R36S pacing] PSX_VSYNC=$PSX_VSYNC (0=wall clock limiter)"
+
 echo "[R36S cpu] PSX_IDLE_SKIP=$PSX_IDLE_SKIP, PSX_IDLE_SKIP_EXT=0"
 export PSX_NO_LAUNCHER=1
 echo "[R36S] SDL_VIDEO=${SDL_VIDEODRIVER:-auto}, SDL_RENDER=${SDL_RENDER_DRIVER:-auto}, SDL_AUDIO=${SDL_AUDIODRIVER:-auto}, AUDIO_LEGACY=$PSXRECOMP_AUDIO_LEGACY"
@@ -69,9 +75,20 @@ if [ ! -f "$disc" ]; then echo "[ERROR] missing disc: $disc"; exit 1; fi
 
 # Config stays local; don't change desktop config or generated private game C.
 # Avoid high-resolution supersampling / blending on 1GB R36S hardware.
-if ! awk -v aspect="$aspect" '
+cd_speed="${VALKYRIE_CD_SPEED:-4x}"
+case "$cd_speed" in
+    1x|2x|4x|instant) ;;
+    *) echo "[ERROR] Invalid VALKYRIE_CD_SPEED=$cd_speed"; exit 2 ;;
+esac
+echo "[R36S cd] disc_speed=$cd_speed (override VALKYRIE_CD_SPEED=1x for reference timing)"
+if ! awk -v speed="$cd_speed" -v aspect="$aspect" '
+    /^\[runtime\][[:space:]]*$/ {
+        in_runtime=1; seen_runtime=1; print
+        print "disc_speed = \"" speed "\""
+        next
+    }
     /^\[video\][[:space:]]*$/ {
-        in_video=1; seen_video=1; print
+        in_runtime=0; in_video=1; seen_video=1; print
         print "renderer = \"software\""
         print "aspect_ratio = \"" aspect "\""
         print "supersampling = 1"
@@ -79,10 +96,11 @@ if ! awk -v aspect="$aspect" '
         print "antialiasing = false"
         next
     }
-    /^\[/ { in_video=0 }
+    /^\[/ { in_video=0; in_runtime=0 }
+    in_runtime && /^[[:space:]]*disc_speed[[:space:]]*=/ { next }
     in_video && /^[[:space:]]*(renderer|aspect_ratio|supersampling|window_width|antialiasing)[[:space:]]*=/ { next }
     { print }
-    END { if (!seen_video) exit 2 }
+    END { if (!seen_video || !seen_runtime) exit 2 }
 ' game.toml > game-r36s.local.toml; then
     echo "[ERROR] cannot generate local game.toml"; exit 1
 fi
