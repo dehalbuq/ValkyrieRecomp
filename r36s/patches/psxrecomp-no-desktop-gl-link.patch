@@ -1,0 +1,19 @@
+diff --git a/runtime/runtime.cmake b/runtime/runtime.cmake
+--- a/runtime/runtime.cmake
++++ b/runtime/runtime.cmake
+@@ -1932,6 +1932,7 @@
+         if(CMAKE_DL_LIBS)
+             target_link_libraries(${target} PRIVATE ${CMAKE_DL_LIBS})
+         endif()
++        if(NOT VALKYRIE_R36S)
+         # GL for gpu_gl_renderer.c. Do NOT hardcode OpenGL::GL: FindOpenGL
+         # reports OpenGL as found on a GLVND host that has libOpenGL.so but no
+         # legacy libGL.so / glx.h (Steam Deck), yet never creates that target —
+@@ -1957,6 +1958,7 @@
+                 target_link_libraries(${target} PRIVATE "${OPENGL_opengl_LIBRARY}")
+             endif()
+         endif()
++        endif() # R36S software-only build must not link desktop GL/GLX.
+         # Async lobby connect (psx_lobby_client.c) uses pthread on Unix.
+         if(PSXRECOMP_HAS_LOBBY_CLIENT)
+             find_package(Threads REQUIRED)
