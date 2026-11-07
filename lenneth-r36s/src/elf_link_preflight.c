@@ -22,6 +22,7 @@
 #include "asset_provider.h"
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
+static int g_asset_binding_enabled=0;
 typedef struct {
     const char *label;
     uint8_t *raw, *image;
@@ -349,7 +350,8 @@ static int relocate_table(Module *m,Module *partner,
             } else if(ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
                       lenneth_portable_lookup(name,&value)) {
                 st->host_portable++;
-            } else if(ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
+            } else if(g_asset_binding_enabled &&
+                      ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
                       lenneth_asset_lookup(name,&value)) {
                 st->host_assets++;
             } else {
@@ -384,7 +386,8 @@ static size_t unresolved_import_names(const Module *m,
         if(graphics_lookup(name,&addr))continue;
         if(ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
            lenneth_portable_lookup(name,&addr))continue;
-        if(ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
+        if(g_asset_binding_enabled &&
+           ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
            lenneth_asset_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
@@ -403,6 +406,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     Module game={0},cxx={0};
     LinkStats gs={0},cs={0};
     int rc=3;
+    g_asset_binding_enabled=(provider_mode>=3);
     if(provider_mode>=1)provider_init();
     if(provider_mode>=2)lenneth_portable_open();
     if(provider_mode>=3){
@@ -471,6 +475,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                "Bionic/JNI/asset/audio symbols NOT ready; game NOT executed\n");
     rc=0;
 cleanup:
+    g_asset_binding_enabled=0;
     unload(&game);
     unload(&cxx);
     if(provider_mode>=3)lenneth_asset_close_root();
