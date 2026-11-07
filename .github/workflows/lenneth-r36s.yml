@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase2 ELF loader preflight
+name: Lenneth Android R36S - ARM64 phase3 relocation linker preflight
 
 on:
   workflow_dispatch:
@@ -65,6 +65,33 @@ jobs:
             exit 1
           fi
 
+      - name: Test phase3 multi-library AArch64 linker without game files
+        run: |
+          cat > /tmp/lenneth_partner.c <<'EOF'
+          __attribute__((visibility("default"))) int v1_shared_api(void) { return 42; }
+          __attribute__((visibility("default"))) int v1_shared_global = 14;
+          EOF
+          cat > /tmp/lenneth_game.c <<'EOF'
+          extern int v1_shared_api(void);
+          extern int v1_shared_global;
+          static int private_value = 7;
+          int *internal_ref = &private_value;
+          int *imported_data = &v1_shared_global;
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm, void *r) {
+            (void)vm; (void)r;
+            return v1_shared_api() + *imported_data + *internal_ref;
+          }
+          EOF
+          cc -shared -fPIC -O2 -o /tmp/phase3_partner.so /tmp/lenneth_partner.c
+          cc -shared -fPIC -O2 -o /tmp/phase3_game.so /tmp/lenneth_game.c
+          ./build-lenneth/lenneth-probe --link-plan /tmp/phase3_game.so /tmp/phase3_partner.so | tee lenneth-linkplan-test.txt
+          grep -q 'PHASE3=PASS' lenneth-linkplan-test.txt
+          grep -Eq 'cross_libcxx=[1-9][0-9]*' lenneth-linkplan-test.txt
+          if ./build-lenneth/lenneth-probe --link-plan /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid game ELF passed linking preflight"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -77,13 +104,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-phase2-arm64.zip ports)
-          sha256sum lenneth-r36s-phase2-arm64.zip
-          ls -lh lenneth-r36s-phase2-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-phase3-arm64.zip ports)
+          sha256sum lenneth-r36s-phase3-arm64.zip
+          ls -lh lenneth-r36s-phase3-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Phase2
-          path: lenneth-r36s-phase2-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Phase3
+          path: lenneth-r36s-phase3-arm64.zip
           if-no-files-found: error
           retention-days: 14
