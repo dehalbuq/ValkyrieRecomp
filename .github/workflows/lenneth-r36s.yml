@@ -864,6 +864,22 @@ jobs:
           grep -Eq 'phase23_jmp_slots=[1-9][0-9]*' phase23-link.txt
           grep -q 'FINAL=PASS' phase23-link.txt
           if grep -E '[[:space:]](setjmp|longjmp)$' lenneth-blockers.tsv; then exit 1; fi
+          cat > /tmp/phase23_no_legacy.c <<'EOF'
+          #include <setjmp.h>
+          static int (*volatile old_setjmp)(jmp_buf)=setjmp;
+          static void (*volatile old_longjmp)(jmp_buf,int)=longjmp;
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved){
+            (void)vm;(void)reserved;
+            return old_setjmp!=0 && old_longjmp!=0;
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase23_no_legacy.so /tmp/phase23_no_legacy.c
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase23_no_legacy.so /tmp/phase3_partner.so | tee phase23-gate-denied.txt
+          grep -q 'guest_legacy_abi_gate=REJECTED' phase23-gate-denied.txt
+          grep -q 'setjmp' lenneth-blockers.tsv
+          grep -q 'longjmp' lenneth-blockers.tsv
+          grep -q 'FINAL=PASS' phase23-gate-denied.txt
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -878,13 +894,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase22-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase22-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase22-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase23-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase23-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase23-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase22
-          path: lenneth-r36s-multitest-phase22-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase23
+          path: lenneth-r36s-multitest-phase23-arm64.zip
           if-no-files-found: error
           retention-days: 14
