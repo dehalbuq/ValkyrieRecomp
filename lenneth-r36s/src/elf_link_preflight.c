@@ -503,7 +503,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
            " cross_game=%" PRIu64 " pending_host=%" PRIu64
            " host_gles_slots=%" PRIu64 " host_portable_slots=%" PRIu64
            " host_asset_slots=%" PRIu64 " host_log_slots=%" PRIu64
-           " unsupported=%" PRIu64 "\n",
+           " host_thread_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
            cs.relocations,cs.relative,cs.internal,cs.partner,
            cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.host_logging,cs.host_threads,cs.unsupported);
     size_t missing_game=unresolved_import_names(&game,&cxx);
