@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase14 Bionic stdio proxy multitest
+name: Lenneth Android R36S - ARM64 phase15 OpenSL ES typed ABI multi-suite
 
 on:
   workflow_dispatch:
@@ -495,6 +495,51 @@ jobs:
             exit 1
           fi
 
+      - name: Phase15 test OpenSL ES IID data and typed audio engine interface ABI
+        run: |
+          ./build-lenneth/lenneth-probe --opensl-selftest | tee lenneth-opensl-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-opensl-fixture.txt
+          grep -q 'iid_data_symbols=4' lenneth-opensl-fixture.txt
+          grep -q 'real_pcm_output=NOT_IMPLEMENTED' lenneth-opensl-fixture.txt
+
+          cat > /tmp/lenneth_phase15_mock.c <<'EOF'
+          #include <stdint.h>
+          extern const void *SL_IID_ENGINE;
+          extern const void *SL_IID_PLAY;
+          extern const void *SL_IID_BUFFERQUEUE;
+          extern const void *SL_IID_VOLUME;
+          extern unsigned slCreateEngine(void *, unsigned, void *,
+                                         unsigned, void *, void *);
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved) {
+            (void)vm;(void)reserved;
+            volatile const void *p1=SL_IID_ENGINE;
+            volatile const void *p2=SL_IID_PLAY;
+            volatile const void *p3=SL_IID_BUFFERQUEUE;
+            volatile const void *p4=SL_IID_VOLUME;
+            return (p1!=0)+(p2!=0)+(p3!=0)+(p4!=0)+
+                   (int)slCreateEngine(0,0,0,0,0,0);
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase15_game.so /tmp/lenneth_phase15_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase15_game.so /tmp/phase3_partner.so | tee lenneth-phase15-batch-test.txt
+          grep -q 'PHASE15_LINK=PASS' lenneth-phase15-batch-test.txt
+          grep -Eq 'host_opensl_slots=[1-9][0-9]*' lenneth-phase15-batch-test.txt
+          grep -Eq 'opensl_abi_shims=[1-9][0-9]*' lenneth-phase15-batch-test.txt
+          grep -q 'OpenSL ES engine/PCM queue/IID ABI synthetic fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'OpenSL actual PCM sound output: NOT_IMPLEMENTED' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase15-batch-test.txt
+          # Confirm no extra imports or data-type confusion are mapped.
+          if grep -E 'SL_IID_(ENGINE|PLAY|BUFFERQUEUE|VOLUME)|slCreateEngine' lenneth-blockers.tsv; then
+            echo "ERROR: required OpenSL symbols were left unresolved"
+            exit 1
+          fi
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: malformed ELF accepted by phase15"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -509,13 +554,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase14-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase14-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase14-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase15-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase15-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase15-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase14
-          path: lenneth-r36s-multitest-phase14-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase15
+          path: lenneth-r36s-multitest-phase15-arm64.zip
           if-no-files-found: error
           retention-days: 14
