@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase22 legacy Bionic FILE and jmp ABI audit
+name: Lenneth Android R36S - ARM64 phase23 native Bionic AArch64 jump suite
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase22-staging
+      - port/lenneth-phase23-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -838,8 +838,8 @@ jobs:
           grep -q 'Phase22 Bionic __sF standard stream data bridge: PASS' lenneth-suite-summary.txt
           grep -q 'Phase22 Bionic setjmp/longjmp versioned ABI audit (NOT MAPPED): PASS' lenneth-suite-summary.txt
           grep -q 'FINAL=PASS' lenneth-phase22-batch.txt
-          grep -q 'setjmp' lenneth-blockers.tsv
-          grep -q 'longjmp' lenneth-blockers.tsv
+          grep -q 'guest_legacy_abi_gate=ACCEPTED' lenneth-phase22-batch.txt
+          grep -Eq 'phase23_jmp_slots=[1-9][0-9]*' lenneth-phase22-batch.txt
           if grep -q '__sF' lenneth-blockers.tsv; then
             echo 'ERROR: __sF should not remain unresolved'
             exit 1
