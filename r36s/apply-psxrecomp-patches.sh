@@ -25,3 +25,6 @@ for PATCH in \
         exit 1
     fi
 done
+
+# SDL2-only handheld hooks: preserve the pinned desktop runtime unchanged.
+python3 "$ROOT/r36s/patches/r36s-main-hooks.py"
