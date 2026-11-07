@@ -773,6 +773,8 @@ int lenneth_synthetic_execute(const char *game_path,const char *partner_path) {
        addr<(uint64_t)(uintptr_t)game.image ||
        addr>=(uint64_t)(uintptr_t)game.image+game.span)
         goto end;
+    __builtin___clear_cache((char*)game.image,(char*)game.image+game.span);
+    __builtin___clear_cache((char*)partner.image,(char*)partner.image+partner.span);
     if(!synthetic_protect(&game) || !synthetic_protect(&partner)){
         printf("[lenneth synthetic] executable mapping protection failed\n");
         goto end;
