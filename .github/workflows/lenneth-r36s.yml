@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase19 stat sysconf + full ABI multi-suite
+name: Lenneth Android R36S - ARM64 phase20 restricted fdopen syscall and full ABI multi-suite
 
 on:
   workflow_dispatch:
@@ -693,6 +693,55 @@ jobs:
             exit 1
           fi
 
+      - name: Phase20 restricted fdopen, priority and syscall ABI fixtures
+        run: |
+          ./build-lenneth/lenneth-probe --stdio-selftest | tee lenneth-phase20-fdopen-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase20-fdopen-fixture.txt
+          grep -q 'shimmed_api=16' lenneth-phase20-fdopen-fixture.txt
+          ./build-lenneth/lenneth-probe --phase20-selftest | tee lenneth-phase20-process-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase20-process-fixture.txt
+          grep -q 'shim_symbols=2' lenneth-phase20-process-fixture.txt
+          grep -q 'syscall_policy=READONLY_ALLOWLIST' lenneth-phase20-process-fixture.txt
+          cat > /tmp/lenneth_phase20_mock.c <<'EOF'
+          #define _GNU_SOURCE
+          #include <stdint.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <unistd.h>
+          #include <sys/resource.h>
+          #include <sys/types.h>
+          #include <sys/syscall.h>
+          extern unsigned char __sF[];
+          static FILE *(*volatile shim_fdopen)(int,const char*)=fdopen;
+          static int (*volatile shim_setpriority)(int,id_t,int)=setpriority;
+          static long (*volatile shim_syscall)(long,...)=syscall;
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved){
+            (void)vm;(void)reserved;
+            volatile unsigned char forbidden=__sF[0];
+            return (int)forbidden + (shim_fdopen(0,"rb")!=0) +
+                   shim_setpriority(PRIO_PROCESS,0,0) +
+                   (int)shim_syscall(SYS_getpid);
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase20_game.so /tmp/lenneth_phase20_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase20_game.so /tmp/phase3_partner.so | tee lenneth-phase20-batch.txt
+          grep -q 'PHASE20_LINK=PASS' lenneth-phase20-batch.txt
+          grep -Eq 'phase20_abi_shims=[1-9][0-9]*' lenneth-phase20-batch.txt
+          grep -Eq 'stdio_proxy_shims=[1-9][0-9]*' lenneth-phase20-batch.txt
+          grep -q 'Phase20 restricted fdopen/priority/syscall fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase20-batch.txt
+          grep -q '__sF' lenneth-blockers.tsv
+          if grep -E 'fdopen|setpriority|syscall' lenneth-blockers.tsv; then
+            echo 'ERROR: Phase20 mapped symbols still appear as blockers'
+            exit 1
+          fi
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo 'ERROR: malformed ELF accepted by Phase20'
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -707,13 +756,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase19-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase19-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase19-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase20-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase20-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase20-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase19
-          path: lenneth-r36s-multitest-phase19-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase20
+          path: lenneth-r36s-multitest-phase20-arm64.zip
           if-no-files-found: error
           retention-days: 14
