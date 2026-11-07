@@ -46,7 +46,11 @@ enum { SL_OK=0,SL_PRECONDITION=1,SL_INVALID=2,SL_NO_MEMORY=3,
 enum { OBJ_UNREALIZED=1,OBJ_REALIZED=2,PLAY_STOPPED=1,PLAY_PAUSED=2,
        PLAY_PLAYING=3,LOC_OUTPUT_MIX=4,LOC_BUFFER_QUEUE=6,FMT_PCM=2 };
 enum { MAX_OBJECTS=64,MAX_QUEUE=16,MAX_PCM_BUFFER=262144 };
-struct ObjectV,EngineV,PlayV,QueueV,VolumeV;
+struct ObjectV;
+struct EngineV;
+struct PlayV;
+struct QueueV;
+struct VolumeV;
 typedef const struct ObjectV * const *ObjectItf;
 typedef const struct EngineV * const *EngineItf;
 typedef const struct PlayV * const *PlayItf;
