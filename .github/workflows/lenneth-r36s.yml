@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase12 multi-ABI fd, unicode and stack guard
+name: Lenneth Android R36S - ARM64 phase13 restricted linker, saves and Unicode
 
 on:
   workflow_dispatch:
@@ -406,6 +406,52 @@ jobs:
             exit 1
           fi
 
+      - name: Phase13 restricted Android dynamic loader and sandboxed saves ABI
+        run: |
+          ./build-lenneth/lenneth-probe --ndk-dl-selftest | tee lenneth-ndk-dl-test.txt
+          ./build-lenneth/lenneth-probe --saveops-selftest | tee lenneth-saveops-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-ndk-dl-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-saveops-test.txt
+
+          cat > /tmp/lenneth_phase13_mock.c <<'EOF'
+          #include <stdint.h>
+          #include <wchar.h>
+          extern void *dlopen(const char*,int);
+          extern void *dlsym(void*,const char*);
+          extern int dlclose(void*);
+          extern char *dlerror(void);
+          extern int rename(const char*,const char*);
+          extern int mkdir(const char*,unsigned int);
+          extern int remove(const char*);
+          extern int iswalpha(unsigned int);
+          extern unsigned int towupper(unsigned int);
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved) {
+            (void)vm;(void)reserved;
+            void *lib=dlopen("libGLESv2.so",2);
+            void *symbol=dlsym(lib,"glClear");
+            if(lib)dlclose(lib);
+            if(!symbol)dlerror();
+            int n=mkdir("saves/mock",0700);
+            n+=rename("saves/mock/a","saves/mock/b");
+            n+=remove("saves/mock/b");
+            return n+iswalpha('A')+towupper('q');
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase13_game.so /tmp/lenneth_phase13_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase13_game.so /tmp/phase3_partner.so | tee lenneth-phase13-batch-test.txt
+          grep -q 'PHASE13_LINK=PASS' lenneth-phase13-batch-test.txt
+          grep -Eq 'host_dl_slots=[1-9][0-9]*' lenneth-phase13-batch-test.txt
+          grep -Eq 'host_saveops_slots=[1-9][0-9]*' lenneth-phase13-batch-test.txt
+          grep -q 'Restricted Android dynamic loader GLES/EGL fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'Sandboxed app-private save operations fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase13-batch-test.txt
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: malformed ELF passed phase13"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -420,13 +466,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase12-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase12-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase12-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase13-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase13-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase13-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase12
-          path: lenneth-r36s-multitest-phase12-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase13
+          path: lenneth-r36s-multitest-phase13-arm64.zip
           if-no-files-found: error
           retention-days: 14
