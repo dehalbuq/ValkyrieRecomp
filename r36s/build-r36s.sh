@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Experimental two-stage ValkyrieRecomp -> R36S build.
-# Stage 1 (x86_64 Linux): generate game C + free OpenBIOS C from your OWN discs.
+# Stage 1 (Linux x86_64/AArch64 build host): generate game C + OpenBIOS from your OWN discs.
 # Stage 2 (x86_64 Linux): cross-compile them for a matching DarkOSRE AArch64 sysroot.
 # Never uploads game discs, generated C or the resulting binary to GitHub.
 set -euo pipefail
@@ -27,15 +27,18 @@ for tool in cmake ninja python3; do have "$tool"; done
     fatal "Missing psxrecomp submodule. Run: git submodule update --init --recursive"
 
 if [ "$MODE" = --generate ] || [ "$MODE" = --all ]; then
-    # Generation is a HOST operation: never attempt it on a memory-limited R36S.
-    [ "$(uname -m)" = x86_64 ] ||
-        fatal "Generate on an x86_64 Linux/WSL host (not the R36S)"
+    # Generate on a full build host (GitHub's native ARM64 runner is supported).
+    # Never attempt generation on the memory-limited handheld itself.
+    case "$(uname -m)" in
+        x86_64|aarch64) ;;
+        *) fatal "Generation requires a Linux x86_64 or AArch64 host" ;;
+    esac
     DISC="${VALKYRIE_DISC1_CUE:-$ROOT/disc/Disc1/Valkyrie Profile (USA) (Disc 1).cue}"
     [ -f "$DISC" ] || fatal "Disc 1 CUE not found: $DISC"
     [ -f game.toml ] || fatal "Missing game.toml"
     have gcc
     have g++
-    say "Building PSXRecomp emitter tools (host x86_64)..."
+    say "Building PSXRecomp emitter tools (native host $(uname -m))..."
     bash psxrecomp/tools/ci/build_emitters.sh --jobs "$JOBS"
     say "Generating recompiled MIT OpenBIOS backend..."
     (
