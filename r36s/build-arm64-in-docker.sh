@@ -15,6 +15,9 @@ JOBS="${R36S_BUILD_JOBS:-2}"
 case "$JOBS" in ''|*[!0-9]*) die "R36S_BUILD_JOBS must be positive integer";; esac
 [ "$JOBS" -ge 1 ] || die "R36S_BUILD_JOBS must be >=1"
 
+# Apply only our pinned C11 source compatibility patch; never modify game data.
+bash r36s/apply-psxrecomp-patches.sh
+
 echo "[R36S-Docker] Building real game runtime for AArch64 / Cortex-A35"
 cmake -S . -B build-r36s-docker -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
