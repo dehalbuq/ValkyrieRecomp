@@ -23,7 +23,7 @@ typedef struct {
     uint32_t sigmask;
     uint64_t core[13];
     uint64_t fp[8];
-    uint64_t reserved[9];
+    uint64_t reserved[10];
 } LegacyJmp;
 _Static_assert(sizeof(LegacyJmp)==256,"Bionic legacy jmp layout");
 _Static_assert(offsetof(LegacyJmp,core)==8,"legacy callee saved x30/sp offset");
