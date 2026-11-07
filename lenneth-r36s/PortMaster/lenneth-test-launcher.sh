@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 12: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 13: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 12 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 13 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -21,6 +21,7 @@ echo "[lenneth suite] Experimental pthread guest-object adapters and extra libc/
 echo "[lenneth suite] Additional bounded Bionic FORTIFY/errno adapters and synthetic self-test enabled."
 echo "[lenneth suite] C++ lifecycle + independent synthetic ARM64 executable loader test enabled."
 echo "[lenneth suite] Phase12: sandboxed POSIX fd, raw UTF-32 and process-local stack guard tests enabled."
+echo "[lenneth suite] Phase13: allowlisted GLES/EGL guest dl* handles, save-only rename/mkdir/remove, and scalar wchar operations."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
