@@ -8,6 +8,7 @@
 /* Independent Linux ARM64 bootstrap. Does not run the commercial game. */
 int lenneth_elf_audit(const char *filename);
 int lenneth_elf_map_preflight(const char *filename);
+int lenneth_link_preflight(const char *game_path,const char *cxx_path);
 
 static const char *vs_src =
     "attribute vec2 a_pos; void main(){gl_Position=vec4(a_pos,0.0,1.0);}";
@@ -254,6 +255,8 @@ int main(int argc,char **argv) {
         return lenneth_elf_audit(argv[2]);
     if(argc==3 && strcmp(argv[1],"--preflight")==0)
         return lenneth_elf_map_preflight(argv[2]);
+    if(argc==4 && strcmp(argv[1],"--link-plan")==0)
+        return lenneth_link_preflight(argv[2],argv[3]);
     if(argc>=2 && strcmp(argv[1],"--video")==0) {
         int duration=20;
         if(argc==4 && strcmp(argv[2],"--seconds")==0){
@@ -262,6 +265,6 @@ int main(int argc,char **argv) {
         }
         return video_probe(duration);
     }
-    fprintf(stderr,"Usage: %s --inspect libMyGame.so | --preflight libMyGame.so | --video [--seconds 20]\n",argv[0]);
+    fprintf(stderr,"Usage: %s --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --video [--seconds 20]\n",argv[0]);
     return 2;
 }
