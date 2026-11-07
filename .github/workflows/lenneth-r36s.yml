@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 native bootstrap
+name: Lenneth Android R36S - ARM64 phase2 ELF loader preflight
 
 on:
   workflow_dispatch:
@@ -47,6 +47,24 @@ jobs:
             exit 1
           fi
 
+      - name: Test AArch64 mapping and safe relocations with an original mock library
+        run: |
+          cat > /tmp/lenneth_stub.c <<'EOF'
+          static int s_runtime_state = 42;
+          void *s_native_refs[] = {&s_runtime_state, &s_native_refs};
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm, void *reserved) {
+            (void)vm; (void)reserved; return s_runtime_state;
+          }
+          EOF
+          cc -shared -fPIC -O2 -o /tmp/lenneth_mock.so /tmp/lenneth_stub.c
+          ./build-lenneth/lenneth-probe --preflight /tmp/lenneth_mock.so | tee lenneth-preflight-test.txt
+          grep -q 'preflight=PASS' lenneth-preflight-test.txt
+          grep -Eq 'relative_applied=[1-9][0-9]*' lenneth-preflight-test.txt
+          if ./build-lenneth/lenneth-probe --preflight /etc/os-release; then
+            echo "ERROR: invalid ELF passed mapping preflight"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -59,13 +77,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-phase1-arm64.zip ports)
+          (cd package && zip -qr ../lenneth-r36s-phase2-arm64.zip ports)
           sha256sum lenneth-r36s-phase1-arm64.zip
           ls -lh lenneth-r36s-phase1-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Phase1
+          name: Lenneth-Android-R36S-ARM64-Phase2
           path: lenneth-r36s-phase1-arm64.zip
           if-no-files-found: error
           retention-days: 14
