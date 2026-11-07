@@ -14,13 +14,12 @@
 static const auto s_boot_clock_start = std::chrono::steady_clock::now();
 static int s_boot_first_frame = 0;
 static int s_boot_first_nonblack = 0;
-static int s_boot_timeline_armed = 0;
 
 void r36s_boot_profile_mark(const char *stage) {
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - s_boot_clock_start).count();
-    fprintf(stdout, "[R36S boot] stage=%s elapsed_ms=%lld\\n",
+    fprintf(stdout, "[R36S boot] stage=%s elapsed_ms=%lld\n",
             stage ? stage : "(null)", (long long)elapsed);
     fflush(stdout);
 }
@@ -192,7 +191,7 @@ void r36s_exit_menu_tick(void) {
     const Uint32 dt = s_now - s_profile_start_ms;
     if (dt >= 5000) {
         fprintf(stdout,
-                "[R36S perf] simulated_vblanks=%u elapsed_ms=%u effective_fps=%.2f (refresh is NOT fps)\\n",
+                "[R36S perf] simulated_vblanks=%u elapsed_ms=%u effective_fps=%.2f (refresh is NOT fps)\n",
                 s_profile_frames, (unsigned)dt,
                 (double)s_profile_frames * 1000.0 / (double)dt);
         fflush(stdout);
