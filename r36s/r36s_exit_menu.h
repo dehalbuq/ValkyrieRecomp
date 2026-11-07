@@ -7,6 +7,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+void r36s_install_fallback_gamepad_maps(void);
 void r36s_exit_menu_tick(void);
 int r36s_exit_menu_quit_requested(void);
 void r36s_exit_menu_draw(SDL_Renderer *renderer, int logical_w, int logical_h);
