@@ -28,6 +28,8 @@ int lenneth_batch_stdio_plan(const char *game_path,const char *cxx_path);
 int lenneth_batch_opensl_plan(const char *game_path,const char *cxx_path);
 int lenneth_batch_phase17_plan(const char *game_path,const char *cxx_path);
 int lenneth_batch_phase18_plan(const char *game_path,const char *cxx_path);
+int lenneth_batch_phase19_plan(const char *game_path,const char *cxx_path);
+int lenneth_phase19_selftest(void);
 int lenneth_locale18_selftest(void);
 int lenneth_phase17_selftest(void);
 int lenneth_opensl_selftest(void);
@@ -327,14 +329,15 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     int opensl_rc=lenneth_opensl_selftest();
     int phase17_rc=lenneth_phase17_selftest();
     int locale18_rc=lenneth_locale18_selftest();
+    int phase19_rc=lenneth_phase19_selftest();
     /* One mapping and relocation pass for GLES/EGL + portable C +
        Android AAssetManager + logcat + JNI symbol report. */
-    int link_rc=lenneth_batch_phase18_plan(game_path,cxx_path);
+    int link_rc=lenneth_batch_phase19_plan(game_path,cxx_path);
     int video_rc=display?video_probe(15):0;
-    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && phase17_rc==0 && locale18_rc==0 && link_rc==0 && video_rc==0);
+    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && phase17_rc==0 && locale18_rc==0 && phase19_rc==0 && link_rc==0 && video_rc==0);
     FILE *sum=fopen("lenneth-suite-summary.txt","w");
     if(sum) {
-        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 18)\n");
+        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 19)\n");
         fprintf(sum,"Assets fixture: %s\n",asset_rc==0?"PASS":"FAIL");
         fprintf(sum,"Android logging fixture: %s\n",log_rc==0?"PASS":"FAIL");
         fprintf(sum,"Bionic pthread/cond/TLS synthetic fixtures: %s\n",thread_rc==0?"PASS":"FAIL");
@@ -350,6 +353,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"OpenSL actual PCM sound output: NOT_IMPLEMENTED\n");
         fprintf(sum,"Phase17 POSIX directory/time/text/logging fixture: %s\n",phase17_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase18 isolated Bionic locale/UTF8 fixture: %s\n",locale18_rc==0?"PASS":"FAIL");
+        fprintf(sum,"Phase19 translated Bionic stat/sysconf fixture: %s\n",phase19_rc==0?"PASS":"FAIL");
         fprintf(sum,"SDL2 standalone PCM hardware fixture: %s\n",
                 !display?"SKIPPED_IN_HEADLESS_BATCH":(video_rc==0?"PASS":"FAIL"));
         fprintf(sum,"ARM64 ELF/link/JNI inventory: %s\n",link_rc==0?"PASS":"FAIL");
@@ -368,15 +372,17 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         ok=0;
     }
     printf("[lenneth suite] FINAL=%s asset=%d logging=%d threads=%d fortify=%d cxx=%d fd=%d unicode=%d data=%d dl=%d saveops=%d stdio=%d opensl=%d linking=%d "
-           "phase17=%d locale18=%d video_audio_input=%s summary=lenneth-suite-summary.txt "
+           "phase17=%d locale18=%d phase19=%d video_audio_input=%s summary=lenneth-suite-summary.txt "
            "blockers=lenneth-blockers.tsv engine_executed=NO\n",
-           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,fortify_rc,cxx_rc,fd_rc,unicode_rc,data_rc,dynamic_rc,saveops_rc,stdio_rc,opensl_rc,link_rc,phase17_rc,locale18_rc,
+           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,fortify_rc,cxx_rc,fd_rc,unicode_rc,data_rc,dynamic_rc,saveops_rc,stdio_rc,opensl_rc,link_rc,phase17_rc,locale18_rc,phase19_rc,
            !display?"CI_SKIP":(video_rc==0?"PASS":"FAIL"));
     return ok?0:12;
 }
 
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
+    if(argc==2 && strcmp(argv[1],"--phase19-selftest")==0)
+        return lenneth_phase19_selftest();
     if(argc==2 && strcmp(argv[1],"--locale18-selftest")==0)
         return lenneth_locale18_selftest();
     if(argc==2 && strcmp(argv[1],"--phase17-selftest")==0)
@@ -435,6 +441,6 @@ int main(int argc,char **argv) {
         }
         return video_probe(duration);
     }
-    fprintf(stderr,"Usage: %s --locale18-selftest | --phase17-selftest | --pcm-selftest | --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
+    fprintf(stderr,"Usage: %s --phase19-selftest | --locale18-selftest | --phase17-selftest | --pcm-selftest | --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
     return 2;
 }

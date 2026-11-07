@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase18 Bionic locale UTF8 and ABI multi-suite
+name: Lenneth Android R36S - ARM64 phase19 stat sysconf + full ABI multi-suite
 
 on:
   workflow_dispatch:
@@ -651,6 +651,72 @@ jobs:
             exit 1
           fi
 
+      - name: Phase19 validate translated Bionic stat and sysconf ABIs
+        run: |
+          ./build-lenneth/lenneth-probe --phase19-selftest | tee lenneth-phase19-stat-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase19-stat-fixture.txt
+          grep -q 'mapped_abis=3' lenneth-phase19-stat-fixture.txt
+          grep -q 'stat_bytes=128' lenneth-phase19-stat-fixture.txt
+          grep -q 'bionic_stat_layout=TRANSLATED' lenneth-phase19-stat-fixture.txt
+          grep -q 'sandbox_paths=DENIED' lenneth-phase19-stat-fixture.txt
+          cat > /tmp/lenneth_phase19_mock.c <<'EOF'
+          #include <stdint.h>
+          #include <sys/stat.h>
+          #include <unistd.h>
+          extern unsigned char __sF[];
+          static int (*volatile fn_stat)(const char *,struct stat *)=stat;
+          static int (*volatile fn_fstat)(int,struct stat *)=fstat;
+          static long (*volatile fn_sysconf)(int)=sysconf;
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved){
+            (void)vm;(void)reserved;
+            struct stat st;
+            volatile unsigned char marker=__sF[0];
+            return (int)marker+fn_stat("assets/fixture.bin",&st)+
+                   fn_fstat(0,&st)+(int)fn_sysconf(0x27);
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase19_game.so /tmp/lenneth_phase19_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase19_game.so /tmp/phase3_partner.so | tee lenneth-phase19-batch.txt
+          grep -q 'PHASE19_LINK=PASS' lenneth-phase19-batch.txt
+          grep -Eq 'stat_sysconf_slots=[1-9][0-9]*' lenneth-phase19-batch.txt
+          grep -q 'Phase19 translated Bionic stat/sysconf fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase19-batch.txt
+          grep -q '__sF' lenneth-blockers.tsv
+          if grep -E '[[:space:]](stat|fstat|sysconf)
+        run: |
+          set -eu
+          mkdir -p package/ports/lenneth-r36s/mock
+          install -m755 build-lenneth/lenneth-probe package/ports/lenneth-r36s/lenneth-probe
+          install -m644 /tmp/lenneth_mock_guest.so package/ports/lenneth-r36s/mock/synthetic_guest.so
+          install -m644 /tmp/lenneth_mock_partner.so package/ports/lenneth-r36s/mock/synthetic_partner.so
+          install -m755 lenneth-r36s/PortMaster/lenneth-test-launcher.sh package/ports/lenneth-r36s/launch.sh
+          install -m755 "lenneth-r36s/PortMaster/Lenneth Android R36S Test.sh" "package/ports/Lenneth Android R36S Test.sh"
+          install -m644 lenneth-r36s/README.md package/ports/lenneth-r36s/README.md
+          install -m644 lenneth-r36s/LICENSE package/ports/lenneth-r36s/LICENSE
+          test ! -e package/ports/lenneth-r36s/libMyGame.so
+          test ! -e package/ports/lenneth-r36s/libRMS.so
+          test ! -e package/ports/lenneth-r36s/assets
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase19-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase19-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase19-arm64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase19
+          path: lenneth-r36s-multitest-phase19-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
+ lenneth-blockers.tsv; then
+            echo 'ERROR: safe Phase19 symbols were left unresolved'
+            exit 1
+          fi
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo 'ERROR: malformed ELF was accepted'
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -665,13 +731,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase18-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase18-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase18-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase19-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase19-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase19-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase18
-          path: lenneth-r36s-multitest-phase18-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase19
+          path: lenneth-r36s-multitest-phase19-arm64.zip
           if-no-files-found: error
           retention-days: 14

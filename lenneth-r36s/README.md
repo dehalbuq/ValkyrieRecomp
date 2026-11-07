@@ -1037,3 +1037,10 @@ Bionic `locale_t` **must not** be passed to glibc's `locale_t` functions. Instea
 GitHub Actions tests the 17 entry points with a synthetic AArch64 shared object and confirms that `__sF` remains unresolved. The R36S launcher runs all prior checks and the new tests once, and produces exactly the usual ZIP containing `lenneth-r36s.log`, `lenneth-blockers.tsv`, and `lenneth-suite-summary.txt`.
 
 **Limitations:** Android long-double and locale formatting paths require further real-hardware inspection; this is a non-executing relocation and synthetic ABI fixture, **not** proof of commercial code compatibility. Still unmapped: `__sF`, `fdopen`, `stat/fstat`, `setjmp/longjmp`, `syscall`, `sysconf`, `system`, and `dl_iterate_phdr`. The original game libraries remain user-provided; no proprietary data is distributed.
+
+
+## Phase 19 — AArch64 Bionic stat/fstat and sysconf ABI
+
+Adds three reviewed import bindings in the same single-run diagnostic: `stat` and `fstat` convert host filesystem metadata into the **128-byte Android ARM64 stat layout**, with compile-time assertions for offsets, timestamp fields and buffer bounds; `sysconf` explicitly translates Android `_SC_*` numeric values to glibc equivalents. Unknown names yield `EINVAL`. Paths are confined to the existing `assets/` and `saves/` descriptor sandbox and reject symlinks/traversal. The self-test covers real temporary file metadata, canary memory, invalid descriptors/paths and several different Android sysconf codes.
+
+Other blockers including `__sF`, `fdopen`, `setjmp/longjmp`, `setpriority`, `system`, `syscall`, and `dl_iterate_phdr` remain **unmapped** until a verified ABI-safe implementation exists. The commercial game has **not** been executed. All Phase1–18 regression tests stay part of the one-run R36S probe. A GitHub Actions synthetic ELF fixture tests these three imports and ensures the unsafe `__sF` data symbol remains unresolved.
