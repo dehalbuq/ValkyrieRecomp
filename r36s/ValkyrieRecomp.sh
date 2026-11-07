@@ -1,84 +1,91 @@
-#!/bin/sh
-# Experimental R36S launcher. A compatible compiled ARM64 game binary is required.
-# Log initialization and validation failures before trying to start the game.
-set -u
-
-here=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
+#!/bin/bash
+# Valkyrie Profile native PSXRecomp / R36S / DarkOSRE (experimental).
+# SDL2 GLES2 *presentation* is GPU accelerated when supported; the PS1 GPU
+# rasterizer is still CPU/software. No unvalidated OpenGL-3 or Vulkan claims.
+set +u
+here="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
 cd "$here" || exit 1
 log="$here/valkyrie-r36s.log"
-if ! ( : >> "$log" ) 2>/dev/null; then
-    log="/tmp/valkyrie-r36s.log"
-fi
+if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/valkyrie-r36s.log"; fi
 exec >> "$log" 2>&1
 
-printf '[launcher] Start: %s\n' "$(date 2>/dev/null || echo sem-data)"
-printf '[launcher] Working directory: %s\n' "$here"
-printf '[launcher] Architecture: %s\n' "$(uname -m 2>/dev/null || echo desconhecida)"
+echo "=== ValkyrieRecomp R36S $(date -Iseconds 2>/dev/null || date) ==="
+echo "Firmware: $(uname -a); glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || echo unknown)"
 
-aspect=${VALKYRIE_ASPECT:-4:3}
-case "$aspect" in
-    4:3|16:9) ;;
-    *) printf '[ERRO] VALKYRIE_ASPECT deve ser 4:3 ou 16:9; atual: %s\n' "$aspect"; exit 2 ;;
-esac
+# Match the working Killer Instinct R36S approach: PortMaster knows firmware
+# SDL/KMSDRM libraries and its SDL_GAMECONTROLLERCONFIG for the built-in pad.
+controlfolder=''
+for folder in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/PortMaster" \
+    /roms/ports/PortMaster /roms2/ports/PortMaster; do
+    if [ -f "$folder/control.txt" ]; then controlfolder="$folder"; break; fi
+done
+if [ -n "$controlfolder" ]; then
+    echo "[R36S] PortMaster controls: $controlfolder"
+    # Older PortMaster shell files are Bash; never run under /bin/sh.
+    source "$controlfolder/control.txt"
+    if [ -n "${CFW_NAME:-}" ] && [ -f "$controlfolder/mod_${CFW_NAME}.txt" ]; then
+        source "$controlfolder/mod_${CFW_NAME}.txt"
+    fi
+    if declare -F get_controls >/dev/null; then get_controls; fi
+else
+    echo "[R36S] PortMaster control.txt not found; using firmware SDL defaults."
+fi
+if [ -n "${sdl_controllerconfig:-}" ] && [ -z "${SDL_GAMECONTROLLERCONFIG:-}" ]; then
+    export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
+    echo "[R36S] Loaded firmware controller mappings."
+fi
+if [ -z "${SDL_VIDEODRIVER:-}" ]; then export SDL_VIDEODRIVER=kmsdrm; fi
+if [ -z "${SDL_RENDER_DRIVER:-}" ]; then export SDL_RENDER_DRIVER=opengles2; fi
+if [ -z "${SDL_VIDEO_FORCE_EGL:-}" ]; then export SDL_VIDEO_FORCE_EGL=1; fi
+export SDL_RENDER_SCALE_QUALITY=0
+# Linux handheld generally exposes hardware audio through ALSA. Users can
+# override this to pulseaudio/pipewire by exporting SDL_AUDIODRIVER.
+if [ -z "${SDL_AUDIODRIVER:-}" ]; then export SDL_AUDIODRIVER=alsa; fi
+# Use direct SDL audio queue by default for this low-power port; users can
+# A/B the resampling/DRC path with PSXRECOMP_AUDIO_LEGACY=0.
+export PSXRECOMP_AUDIO_LEGACY="${PSXRECOMP_AUDIO_LEGACY:-1}"
+# Physical pad takes priority; the fallback merge keeps keyboard usable too.
+export PSX_DEV_INPUT="${PSX_DEV_INPUT:-1}"
+export PSX_NO_LAUNCHER=1
+echo "[R36S] SDL_VIDEO=${SDL_VIDEODRIVER:-auto}, SDL_RENDER=${SDL_RENDER_DRIVER:-auto}, SDL_AUDIO=${SDL_AUDIODRIVER:-auto}, AUDIO_LEGACY=$PSXRECOMP_AUDIO_LEGACY"
+echo "[R36S] Exit: hold START+SELECT about 2.5s, then A=exit or B=resume. F10 on keyboard."
 
-disc_num=${VALKYRIE_DISC:-1}
-case "$disc_num" in
-    1|2) ;;
-    *) printf '[ERRO] VALKYRIE_DISC deve ser 1 ou 2; atual: %s\n' "$disc_num"; exit 2 ;;
-esac
-
+aspect="${VALKYRIE_ASPECT:-4:3}"
+case "$aspect" in 4:3|16:9) ;; *) echo "[ERROR] invalid aspect $aspect"; exit 2;; esac
+disc_num="${VALKYRIE_DISC:-1}"
+case "$disc_num" in 1|2) ;; *) echo "[ERROR] invalid disc $disc_num"; exit 2;; esac
 disc="disc/Disc${disc_num}/Valkyrie Profile (USA) (Disc ${disc_num}).cue"
-bin=${VALKYRIE_BIN:-./ValkyrieRecomp}
-printf '[launcher] Disc: %s | Aspect: %s | Renderer: software\n' "$disc_num" "$aspect"
-printf '[launcher] Executable: %s\n' "$bin"
+bin="${VALKYRIE_BIN:-./ValkyrieRecomp}"
+if [ ! -x "$bin" ]; then echo "[ERROR] missing executable: $bin"; exit 127; fi
+if [ ! -f game.toml ]; then echo "[ERROR] missing game.toml"; exit 1; fi
+if [ ! -f "$disc" ]; then echo "[ERROR] missing disc: $disc"; exit 1; fi
 
-if [ ! -f "$bin" ]; then
-    printf '[ERRO] O executavel ARM64 ainda nao existe em %s.\n' "$bin"
-    printf '[ACAO] O pacote de preparacao contem pastas/scripts, mas NAO contem o jogo compilado.\n'
-    exit 127
-fi
-if [ ! -x "$bin" ]; then
-    printf '[ERRO] O arquivo existe mas nao tem permissao de execucao: %s\n' "$bin"
-    printf '[ACAO] Verifique permissoes e arquitetura; exemplo: chmod +x "%s"\n' "$bin"
-    exit 126
-fi
-if command -v file >/dev/null 2>&1; then
-    file "$bin" || :
-fi
-if [ ! -f game.toml ]; then
-    printf '[ERRO] game.toml nao encontrado em %s\n' "$here"
-    exit 1
-fi
-if [ ! -f "$disc" ]; then
-    printf '[ERRO] Imagem do disco ausente: %s\n' "$disc"
-    exit 1
-fi
-
-# Keep the desktop original unchanged and write handheld settings separately.
+# Config stays local; don't change desktop config or generated private game C.
+# Avoid high-resolution supersampling / blending on 1GB R36S hardware.
 if ! awk -v aspect="$aspect" '
     /^\[video\][[:space:]]*$/ {
-        in_video = 1
-        seen_video = 1
-        print
+        in_video=1; seen_video=1; print
         print "renderer = \"software\""
         print "aspect_ratio = \"" aspect "\""
         print "supersampling = 1"
         print "window_width = 640"
+        print "antialiasing = false"
         next
     }
-    /^\[/ { in_video = 0 }
-    in_video && /^[[:space:]]*(renderer|aspect_ratio|supersampling|window_width)[[:space:]]*=/ { next }
+    /^\[/ { in_video=0 }
+    in_video && /^[[:space:]]*(renderer|aspect_ratio|supersampling|window_width|antialiasing)[[:space:]]*=/ { next }
     { print }
     END { if (!seen_video) exit 2 }
 ' game.toml > game-r36s.local.toml; then
-    printf '[ERRO] Falha ao gerar game-r36s.local.toml.\n'
-    exit 1
+    echo "[ERROR] cannot generate local game.toml"; exit 1
 fi
-
-mkdir -p saves || exit 1
-LD_LIBRARY_PATH="$here/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-PSX_NO_LAUNCHER=1
-export LD_LIBRARY_PATH PSX_NO_LAUNCHER
-printf '[launcher] Iniciando binario; todas as mensagens serao registradas neste log.\n'
-exec "$bin" --game game-r36s.local.toml --disc "$disc" \
-    --no-launcher --renderer software
+mkdir -p saves
+export LD_LIBRARY_PATH="$here/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if declare -F pm_platform_helper >/dev/null; then pm_platform_helper "$bin"; fi
+echo "[R36S] Starting: $bin --disc '$disc'"
+"$bin" --game game-r36s.local.toml --disc "$disc" --no-launcher --renderer software
+rc=$?
+echo "[R36S] Game exit status: $rc"
+if declare -F pm_finish >/dev/null; then pm_finish; fi
+exit "$rc"
