@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase13 restricted linker, saves and Unicode
+name: Lenneth Android R36S - ARM64 phase14 Bionic stdio proxy multitest
 
 on:
   workflow_dispatch:
@@ -452,6 +452,49 @@ jobs:
             exit 1
           fi
 
+      - name: Phase14 opaque Bionic FILE shim and fortified printf ABI multitest
+        run: |
+          ./build-lenneth/lenneth-probe --stdio-selftest | tee lenneth-stdio-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-stdio-fixture.txt
+          grep -q 'legacy___sF_NOT_MAPPED=1' lenneth-stdio-fixture.txt
+
+          cat > /tmp/lenneth_phase14_mock.c <<'EOF'
+          #include <stdio.h>
+          #include <stdint.h>
+          #include <string.h>
+          extern unsigned char __sF[];
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *reserved) {
+            (void)vm;(void)reserved;
+            FILE *file=fopen("assets/test.bin","rb");
+            char buf[64]={0};
+            if(file){
+              fread(buf,1,4,file);
+              fseek(file,0,SEEK_SET);
+              clearerr(file);
+              fclose(file);
+            }
+            file=fopen("saves/progress.dat","wb");
+            if(file) {
+              fprintf(file,"value=%d",77);
+              fflush(file);
+              fclose(file);
+            }
+            return (int)__sF[0]; /* intentionally UNRESOLVED Bionic data */
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase14_game.so /tmp/lenneth_phase14_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase14_game.so /tmp/phase3_partner.so | tee lenneth-phase14-batch-test.txt
+          grep -q 'PHASE14_LINK=PASS' lenneth-phase14-batch-test.txt
+          grep -Eq 'host_stdio_slots=[1-9][0-9]*' lenneth-phase14-batch-test.txt
+          grep -q 'Experimental opaque Bionic FILE API synthetic fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase14-batch-test.txt
+          grep -q '__sF' lenneth-blockers.tsv
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid ELF accepted by phase14"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -466,13 +509,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase13-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase13-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase13-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase14-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase14-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase14-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase13
-          path: lenneth-r36s-multitest-phase13-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase14
+          path: lenneth-r36s-multitest-phase14-arm64.zip
           if-no-files-found: error
           retention-days: 14
