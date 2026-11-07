@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <stddef.h>
 #include <pthread.h>
 #include <sys/stat.h>
 #include <stdarg.h>
@@ -35,8 +36,89 @@ static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static uint64_t next_generation=1;
 static size_t opened_total;
 
+/* Bionic LP64's legacy FILE layout (152 bytes). The first 3 entries
+ * under __sF are the pre-Android-M stdin, stdout and stderr objects.
+ * These are independent host-opaque objects and MUST NOT be cast to FILE*.
+ * Source: AOSP bionic libc/stdio/local.h + libc/stdio/stdio.cpp.
+ */
+typedef struct {unsigned char *base; size_t size;} BionicBuffer;
+typedef struct {
+    unsigned char *p;
+    int r,w,flags,file;
+    BionicBuffer bf;
+    int lbfsize;
+    void *cookie;
+    int (*close_fn)(void *);
+    int (*read_fn)(void *,char *,int);
+    int64_t (*seek_fn)(void *,int64_t,int);
+    int (*write_fn)(void *,const char *,int);
+    BionicBuffer ext;
+    unsigned char *up;
+    int ur;
+    unsigned char ubuf[3],nbuf[1];
+    BionicBuffer lb;
+    int blksize;
+    int64_t offset;
+} BionicFile;
+_Static_assert(sizeof(BionicFile)==152,"Android ARM64 legacy __sFILE is 152 bytes");
+_Static_assert(offsetof(BionicFile,flags)==16,"Bionic flags offset");
+_Static_assert(offsetof(BionicFile,file)==20,"Bionic fileno offset");
+_Static_assert(offsetof(BionicFile,cookie)==48,"Bionic cookie offset");
+_Static_assert(offsetof(BionicFile,offset)==144,"Bionic offset field");
+
+static _Alignas(8) BionicFile legacy_std[3];
+static GuestStream standard_slots[3];
+static pthread_once_t standard_once=PTHREAD_ONCE_INIT;
+
+/* Static callback entry points are deliberately restricted to
+ * stdout/stderr logging and never let the guest close host stdio. */
+static int standard_read(void *cookie,char *out,int n){
+    (void)cookie;(void)out;(void)n;errno=EBADF;return -1;
+}
+static int standard_write(void *cookie,const char *src,int n){
+    if(!src || n<0){errno=EINVAL;return -1;}
+    for(int i=1;i<3;i++){
+        if(cookie!=&legacy_std[i])continue;
+        ssize_t count=write(i,src,(size_t)n);
+        return count<0?-1:(int)count;
+    }
+    errno=EBADF;return -1;
+}
+static int standard_close(void *cookie){
+    (void)cookie;errno=EPERM;return -1;
+}
+static int64_t standard_seek(void *cookie,int64_t offset,int whence){
+    (void)cookie;(void)offset;(void)whence;errno=ESPIPE;return -1;
+}
+static void init_standard_streams(void){
+    for(int i=0;i<3;i++){
+        BionicFile *f=&legacy_std[i];
+        memset(f,0,sizeof(*f));
+        f->flags=i==0?0x0004:(i==1?0x0008:0x000a);
+        f->file=i;
+        f->cookie=f;
+        f->close_fn=standard_close;
+        f->read_fn=standard_read;
+        f->seek_fn=standard_seek;
+        f->write_fn=standard_write;
+        standard_slots[i].host=i==0?stdin:(i==1?stdout:stderr);
+        standard_slots[i].active=1;
+        standard_slots[i].generation=UINT64_MAX;
+    }
+}
+int lenneth_bionic_stdio_data_lookup(const char *name,uint64_t *value){
+    if(!name||!value||strcmp(name,"__sF"))return 0;
+    pthread_once(&standard_once,init_standard_streams);
+    *value=(uint64_t)(uintptr_t)&legacy_std[0];
+    return 1;
+}
+
+
 static GuestStream *get_slot(void *guest){
     if(!guest)return NULL;
+    pthread_once(&standard_once,init_standard_streams);
+    for(size_t i=0;i<3;i++)
+        if(guest==&legacy_std[i])return &standard_slots[i];
     for(size_t i=0;i<MAX_STREAMS;i++){
         if(guest==&streams[i] && streams[i].active && streams[i].host)
             return &streams[i];
@@ -113,6 +195,10 @@ static void *guest_fdopen(int fd,const char *mode){
 }
 
 static int guest_fclose(void *stream){
+    pthread_once(&standard_once,init_standard_streams);
+    for(size_t i=0;i<3;i++){
+        if(stream==&legacy_std[i]){errno=EPERM;return EOF;}
+    }
     pthread_mutex_lock(&lock);
     GuestStream *slot=get_slot(stream);
     if(!slot){pthread_mutex_unlock(&lock);return EOF;}
@@ -162,6 +248,8 @@ static int guest_fflush(void *stream){
     pthread_mutex_lock(&lock);
     int ret=0;
     if(!stream){
+        /* Bionic fflush(NULL) also flushes the standard streams. */
+        if(fflush(stdout)!=0 || fflush(stderr)!=0)ret=EOF;
         for(size_t i=0;i<MAX_STREAMS;i++){
             if(streams[i].active && streams[i].host && fflush(streams[i].host)!=0)
                 ret=EOF;
@@ -310,4 +398,34 @@ int lenneth_bionic_stdio_selftest(void){
            "commercial_execution=NO\n",ok?"PASS":"FAIL",
            sizeof(api)/sizeof(api[0]),opened_total);
     return ok?0:8;
+}
+
+int lenneth_bionic_stdio_legacy_selftest(void){
+    int ok=1;
+    uint64_t base=0;
+    if(!lenneth_bionic_stdio_data_lookup("__sF",&base)||!base ||
+       lenneth_bionic_stdio_data_lookup("stdin",&base))ok=0;
+    if(!lenneth_bionic_stdio_data_lookup("__sF",&base)||!base)ok=0;
+    const BionicFile *in=(const BionicFile*)(uintptr_t)base;
+    if(sizeof(BionicFile)!=152 || (uintptr_t)&in[1]-(uintptr_t)&in[0]!=152 ||
+       (uintptr_t)&in[2]-(uintptr_t)&in[1]!=152)ok=0;
+    for(int i=0;i<3;i++){
+        if(in[i].file!=i || in[i].cookie!=&in[i] ||
+           in[i].flags!=(i==0?4:(i==1?8:10)) ||
+           guest_fileno((void*)&in[i])!=i ||
+           !in[i].close_fn || !in[i].read_fn || !in[i].write_fn ||
+           !in[i].seek_fn)ok=0;
+    }
+    if(guest_fclose((void*)&in[2])!=EOF || errno!=EPERM)ok=0;
+    if(guest_ferror((void*)&in[1])!=0)ok=0;
+    if(guest_fflush((void*)&in[1])!=0)ok=0;
+    /* No arbitrary file pointer or glibc object may be mistaken for __sF. */
+    if(guest_fileno((void*)(uintptr_t)0x12345)!=-1)ok=0;
+    /* No execution of game code or host shell, and no close(1)/close(2). */
+    if(in[2].close_fn((void*)&in[2])!=-1 || errno!=EPERM)ok=0;
+    printf("[lenneth phase22] LEGACY_STDIO_SELFTEST=%s "
+           "sFILE_bytes=%zu standard_streams=3 "
+           "glibc_FILE_ptrs=HIDDEN close_stdio=DENIED __sF_data=READY "
+           "engine_executed=NO\n",ok?"PASS":"FAIL",sizeof(BionicFile));
+    return ok?0:22;
 }
