@@ -34,7 +34,7 @@ if [ ! -x ./lenneth-probe ]; then
     echo "ERROR: lenneth-probe executable missing"
     exit 127
 fi
-for so in libMyGame.so lib/arm64-v8a/libMyGame.so libRMS.so lib/arm64-v8a/libRMS.so; do
+for so in libMyGame.so lib/arm64-v8a/libMyGame.so libc++_shared.so lib/arm64-v8a/libc++_shared.so libRMS.so lib/arm64-v8a/libRMS.so; do
     if [ -f "$so" ]; then
         echo "Native ELF metadata audit: $so"
         ./lenneth-probe --inspect "$so" || echo "WARNING: ELF audit failed for $so"
