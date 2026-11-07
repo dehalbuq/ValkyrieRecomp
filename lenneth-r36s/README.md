@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–5. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–6. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -300,3 +300,61 @@ Next: typed wrappers for Android Bionic threads and TLS, JNI and
 asset APIs. Enabling execution of any commercial code will require
 full relocation/provider coverage, appropriate memory protections
 and explicit runtime controls after the ABI compatibility is assessed.
+
+## Phase 6: Android AAssetManager read-only shim
+
+The actual **R36S phase-5 log** confirmed:
+- 97 graphics relocation sites bound to native GLES2/EGL.
+- 70 portable libc/libm relocation sites resolved (49 in the game,
+  21 in the original Android libc++ runtime).
+- The game then has 122 distinct host symbols still unresolved,
+  with another 111 in libc++ (233 entries across the two lists,
+  before deduplicating names across libraries).
+- GPU, joystick, ALSA, menu and native ELF checks remain stable.
+
+**New source:** `src/asset_provider.c` and `.h`. Phase 6 includes
+typed Android NDK-style methods for `AAssetManager_open`,
+`AAsset_read`, `AAsset_seek`, `AAsset_getLength`,
+`AAsset_getBuffer`, directory enumeration, file descriptors,
+and other AAsset methods. These access **extracted, local, ordinary
+files** in `ports/lenneth-r36s/assets/` — they do not read compressed
+APK or ZIP entries directly. Compressed entries must be extracted
+locally by the game owner and are not provided or uploaded here.
+
+The implementation opens the local root with `openat`/O_NOFOLLOW,
+blocks absolute paths, `../` traversals and symlink traversal, and
+never writes game assets. `AAsset_getBuffer` uses private,
+read-only `mmap` rather than copying a possibly huge CPK into RAM.
+Real game compatibility, compressed assets, archive decoding,
+Java-facing JNI and other lifecycle work remain unverified.
+
+New command:
+```sh
+./lenneth-probe --asset-plan libMyGame.so libc++_shared.so
+```
+
+This maps the two commercial libraries **non-executable**, binds
+the native GLES/EGL + audited libc/libm providers, and now also
+connects the recognised AAsset function import *slots* to the
+local shim. It logs `host_asset_slots` and
+`[lenneth asset] PHASE6=PASS`.
+
+An independent test that uses only a tiny fixture file (no proprietary
+game bytes) can be run as:
+```sh
+./lenneth-probe --asset-selftest /path/to/test-assets sample.txt
+```
+
+**How to test on R36S:** download the workflow artifact named
+`Lenneth-Android-R36S-ARM64-Phase6`, extract its inner ZIP
+`lenneth-r36s-phase6-arm64.zip` into the ROM partition, and preserve
+your own `libMyGame.so` and `libc++_shared.so` privately at
+`ports/lenneth-r36s/`. Launch Ports → Lenneth Android R36S Test.
+The script creates an *empty* `assets/` folder if absent. You
+**do not need** the 900 MB APK or CPK files for this diagnostic.
+Send only `ports/lenneth-r36s/lenneth-r36s.log`.
+
+This is a **non-executing import and stand-alone asset shim test**,
+not gameplay or a full Android emulation runtime. Future work:
+Bionic thread object layouts/TLS, JNI Cocos2d glue, OpenSL ES
+runtime and careful ELF memory protection before execution.
