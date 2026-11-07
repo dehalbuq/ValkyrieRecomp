@@ -274,7 +274,7 @@ int lenneth_bionic_stdio_selftest(void){
         if(guest_fdopen(fd,"rb")!=NULL)ok=0;
         close(fd);
     }
-    fd=lenneth_fd_open_guest_path("saves/progress.txt",O_RDONLY,0);
+    fd=lenneth_fd_open_guest_path("assets/input.txt",O_RDONLY,0);
     if(fd<0)ok=0;
     else{
         if(guest_fdopen(fd,"wb")!=NULL)ok=0;
