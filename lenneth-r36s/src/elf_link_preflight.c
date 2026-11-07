@@ -22,11 +22,13 @@
 #include "asset_provider.h"
 #include "android_log_provider.h"
 #include "bionic_threads.h"
+#include "bionic_fortify.h"
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
 static int g_asset_binding_enabled=0;
 static int g_android_log_binding_enabled=0;
 static int g_bionic_thread_binding_enabled=0;
+static int g_bionic_fortify_binding_enabled=0;
 typedef struct {
     const char *label;
     uint8_t *raw, *image;
@@ -40,7 +42,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -369,6 +371,11 @@ static int relocate_table(Module *m,Module *partner,
                        ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
                       lenneth_bionic_thread_lookup(name,&value)) {
                 st->host_threads++;
+            } else if(g_bionic_fortify_binding_enabled &&
+                      (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+                       ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+                      lenneth_bionic_fortify_lookup(name,&value)) {
+                st->host_fortify++;
             } else {
                 st->unresolved++;
                 continue;
@@ -408,7 +415,11 @@ static size_t dump_blockers(FILE *out,const Module *m,const Module *partner){
            (g_bionic_thread_binding_enabled &&
             (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
              ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
-            lenneth_bionic_thread_lookup(name,&address)))continue;
+            lenneth_bionic_thread_lookup(name,&address)) ||
+           (g_bionic_fortify_binding_enabled &&
+            (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
+             ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
+            lenneth_bionic_fortify_lookup(name,&address)))continue;
         const char *risk=category(name);
         const char *strength=ELF64_ST_BIND(sym->st_info)==STB_WEAK?
                              "weak_optional":"strong_or_other";
@@ -452,6 +463,10 @@ static size_t unresolved_import_names(const Module *m,
            (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
             ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
            lenneth_bionic_thread_lookup(name,&addr))continue;
+        if(g_bionic_fortify_binding_enabled &&
+           (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+            ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+           lenneth_bionic_fortify_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -472,6 +487,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     g_asset_binding_enabled=(provider_mode>=3);
     g_android_log_binding_enabled=(provider_mode>=4);
     g_bionic_thread_binding_enabled=(provider_mode>=6);
+    g_bionic_fortify_binding_enabled=(provider_mode>=7);
     if(provider_mode>=1)provider_init();
     if(provider_mode>=2)lenneth_portable_open();
     if(provider_mode>=3){
@@ -495,9 +511,10 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
            " cross_libcxx=%" PRIu64 " pending_host=%" PRIu64
            " host_gles_slots=%" PRIu64 " host_portable_slots=%" PRIu64
            " host_asset_slots=%" PRIu64 " host_log_slots=%" PRIu64
-           " host_thread_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
+           " host_thread_slots=%" PRIu64 " host_fortify_slots=%" PRIu64
+           " unsupported=%" PRIu64 "\n",
            gs.relocations,gs.relative,gs.internal,gs.partner,
-           gs.unresolved,gs.host_gles,gs.host_portable,gs.host_assets,gs.host_logging,gs.host_threads,gs.unsupported);
+           gs.unresolved,gs.host_gles,gs.host_portable,gs.host_assets,gs.host_logging,gs.host_threads,gs.host_fortify,gs.unsupported);
     printf("[lenneth link] libc++_shared: relocs=%" PRIu64
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_game=%" PRIu64 " pending_host=%" PRIu64
@@ -505,7 +522,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
            " host_asset_slots=%" PRIu64 " host_log_slots=%" PRIu64
            " host_thread_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
            cs.relocations,cs.relative,cs.internal,cs.partner,
-           cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.host_logging,cs.host_threads,cs.unsupported);
+           cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.host_logging,cs.host_threads,cs.host_fortify,cs.unsupported);
     size_t missing_game=unresolved_import_names(&game,&cxx);
     size_t missing_cxx=unresolved_import_names(&cxx,&game);
     printf("[lenneth link] unique_pending game=%zu cxx=%zu\n",
@@ -547,6 +564,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    "graphics=%" PRIu64 " portable=%" PRIu64
                    " assets=%" PRIu64 " logging=%" PRIu64
                    " pthread_shims=%" PRIu64
+                   " fortify_shims=%" PRIu64
                    " unresolved_sites=%" PRIu64
                    " missing_name_entries=%zu unsupported_types=%" PRIu64
                    " guest_execution=NO\n",
@@ -555,11 +573,19 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    gs.host_assets+cs.host_assets,
                    gs.host_logging+cs.host_logging,
                    gs.host_threads+cs.host_threads,
+                   gs.host_fortify+cs.host_fortify,
                    gs.unresolved+cs.unresolved,
                    missing_game+missing_cxx,
                    gs.unsupported+cs.unsupported);
         }
-        if(provider_mode==6) {
+        if(provider_mode==7)
+            printf("[lenneth fortify] PHASE10_LINK=PASS checked_memory_errno_slots=%" PRIu64
+                   " unresolved_sites=%" PRIu64
+                   " runtime_stdio_dynloader_OpenSLES=NOT_READY "
+                   "commercial_code=NOT_EXECUTED\n",
+                   gs.host_fortify+cs.host_fortify,
+                   gs.unresolved+cs.unresolved);
+        if(provider_mode>=6) {
             printf("[lenneth bionic-thread] PHASE9_LINK=PASS "
                    "guest_mutex_cond_tls_pthread_slots=%" PRIu64
                    " unresolved_sites=%" PRIu64
@@ -613,6 +639,7 @@ cleanup:
     g_asset_binding_enabled=0;
     g_android_log_binding_enabled=0;
     g_bionic_thread_binding_enabled=0;
+    g_bionic_fortify_binding_enabled=0;
     unload(&game);
     unload(&cxx);
     if(provider_mode>=3)lenneth_asset_close_root();
@@ -640,4 +667,7 @@ int lenneth_batch_plan(const char *game_path,const char *cxx_path) {
 }
 int lenneth_batch_thread_plan(const char *game_path,const char *cxx_path) {
     return lenneth_link_preflight_mode(game_path,cxx_path,6);
+}
+int lenneth_batch_fortify_plan(const char *game_path,const char *cxx_path) {
+    return lenneth_link_preflight_mode(game_path,cxx_path,7);
 }
