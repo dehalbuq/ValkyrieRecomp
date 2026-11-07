@@ -684,31 +684,7 @@ jobs:
           grep -q 'Phase19 translated Bionic stat/sysconf fixture: PASS' lenneth-suite-summary.txt
           grep -q 'FINAL=PASS' lenneth-phase19-batch.txt
           grep -q '__sF' lenneth-blockers.tsv
-          if grep -E '[[:space:]](stat|fstat|sysconf)
-        run: |
-          set -eu
-          mkdir -p package/ports/lenneth-r36s/mock
-          install -m755 build-lenneth/lenneth-probe package/ports/lenneth-r36s/lenneth-probe
-          install -m644 /tmp/lenneth_mock_guest.so package/ports/lenneth-r36s/mock/synthetic_guest.so
-          install -m644 /tmp/lenneth_mock_partner.so package/ports/lenneth-r36s/mock/synthetic_partner.so
-          install -m755 lenneth-r36s/PortMaster/lenneth-test-launcher.sh package/ports/lenneth-r36s/launch.sh
-          install -m755 "lenneth-r36s/PortMaster/Lenneth Android R36S Test.sh" "package/ports/Lenneth Android R36S Test.sh"
-          install -m644 lenneth-r36s/README.md package/ports/lenneth-r36s/README.md
-          install -m644 lenneth-r36s/LICENSE package/ports/lenneth-r36s/LICENSE
-          test ! -e package/ports/lenneth-r36s/libMyGame.so
-          test ! -e package/ports/lenneth-r36s/libRMS.so
-          test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase19-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase19-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase19-arm64.zip
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase19
-          path: lenneth-r36s-multitest-phase19-arm64.zip
-          if-no-files-found: error
-          retention-days: 14
- lenneth-blockers.tsv; then
+          if grep -E '[[:space:]](stat|fstat|sysconf)' lenneth-blockers.tsv; then
             echo 'ERROR: safe Phase19 symbols were left unresolved'
             exit 1
           fi
