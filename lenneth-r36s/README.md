@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–11, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
+**Experimental bootstrap — phases 1–12, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -706,3 +706,77 @@ and
 https://android.googlesource.com/platform/bionic/+/main/libc/bionic/__cxa_thread_atexit_impl.cpp .
 The adapters are independently written and carry the project's
 MIT license.
+
+## Phase 12: sandboxed fd / wchar ABI / stack guard, grouped validation
+
+The owner's dArkOSRE R36S phase-11 ZIP confirms that the independently
+authored \`--execute-synthetic\` ARM64 test **actually ran** on the RK3326:
+\`R36S_EXECUTION=PASS\`, crossing from one separately loaded synthetic
+library to a second and correctly returning **77**. This does **not**
+execute the commercial game. GPU, ALSA, gamepad, and all prior fixture
+tests remained PASS.
+
+The phase-11 physical report recorded **283 externally bound guest
+relocation sites** (GLES/EGL 97, portable C 104, AAsset 11, Android log
+4, experimental Bionic pthread 44, FORTIFY 17 and C++ lifecycle 6)
+and **119 pending named import entries**, representing **110 unique
+names** (51 in the game module, 68 in Android libc++). Of these,
+114 were Bionic/libc/libm/dl and five were OpenSL ES. Binding a
+relocation slot does not prove the shim is safe when called by the game.
+
+### Phase-12 batch changes
+
+- \`src/posix_fd_provider.c\`: typed Android-like POSIX file-descriptor
+  functions \`open\`, \`read\`, \`write\`, \`close\`, \`lseek\`,
+  \`gettid\`, \`clock_nanosleep\`, \`memalign\`.
+  A relative \`assets/...\` path is read-only. A \`saves/...\` path is
+  private to the local port directory; parent traversal, symlinks and
+  unsupported Android absolute paths are rejected. The owner can put
+  private game CPKs in \`assets/\` later, but the phase-12 test requires
+  none. This is not yet a complete Android path or filesystem service.
+- \`src/unicode_provider.c\`: only the **six** primitive UTF-32 wchar
+  array functions (\`wcslen\`, \`wmemcpy\`, \`wmemmove\`, \`wmemset\`,
+  \`wmemchr\`, \`wmemcmp\`). Does NOT map Bionic \`locale_t\`,
+  \`mbstate_t\`, encodings, conversions or locale-sensitive \`FILE*\`.
+- \`src/bionic_data_provider.c\`: one independently randomized,
+  process-local \`__stack_chk_guard\` **data-symbol** import; it
+  deliberately does not fake the incompatible Bionic \`__sF\`
+  FILE array or OpenSL ES \`SL_IID_*\` objects.
+- All three modules include **independent synthetic tests**. Each is
+  tested by CI on native ARM64 and by the full R36S \`--batch\` suite
+  along with earlier C++, pthread, fortified libc, AAsset, Android log,
+  graphics/audio/gamepad probes.
+- The guest ELF continues to be mapped non-executable; only our
+  explicitly marked independent synthetic test ELF is permitted to
+  execute. The \`lenneth-blockers.tsv\` inventory reveals further
+  unsupported Android interfaces without storing private binary data.
+
+### How to test the combined Phase 12
+
+1. Download the GitHub Actions artifact
+   \`Lenneth-Android-R36S-ARM64-Multitest-Phase12\` from the
+   \`.github/workflows/lenneth-r36s.yml\` workflow.
+2. Extract the inner \`lenneth-r36s-multitest-phase12-arm64.zip\`
+   into the ROM partition, preserving \`ports/\`.
+3. Keep your locally sourced private \`libMyGame.so\` and
+   \`libc++_shared.so\` in \`ports/lenneth-r36s/\`. No APK or game
+   data assets are bundled.
+4. Run Ports → **Lenneth Android R36S Test** once and send back only
+   \`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\`.
+
+Expected new markers: \`[lenneth fd] SELFTEST=PASS\`,
+\`[lenneth unicode] SELFTEST=PASS\`,
+\`[lenneth bionic-data] SELFTEST=PASS\`,
+\`[lenneth io] PHASE12_LINK=PASS\`, and existing
+\`[lenneth synthetic] R36S_EXECUTION=PASS\`.
+
+### Remaining blockers
+
+Not yet implemented or guest-executed: Bionic \`FILE*\` and \`__sF\`,
+Android-relative and absolute path translation beyond the two local
+roots, Android \`dlopen/dlsym/dl_iterate_phdr\` namespace emulation,
+\`setjmp/longjmp\` and platform signal-context ABI, full Java/JNI
+object/VM/class tables, locale/multibyte state, and OpenSL ES
+interfaces and CRIWARE audio/video lifecycle. Bionic CRT constructors
+and game executable mappings stay disabled. This remains a hardware
+and ABI **diagnostic**, not a runnable game port.
