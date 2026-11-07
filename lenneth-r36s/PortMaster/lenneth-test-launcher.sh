@@ -6,7 +6,7 @@ cd "$root" || exit 1
 log="$root/lenneth-r36s.log"
 if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 exec >> "$log" 2>&1
-echo "=== Lenneth Android R36S PHASE 3 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth Android R36S PHASE 4 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "This binary is a native EGL/GLES2/gamepad/audio/ELF diagnostic, NOT the commercial game."
@@ -53,6 +53,8 @@ done
 if [ -n "$game_so" ] && [ -n "$cxx_so" ]; then
     echo "Phase3 two-module relocation/link plan: $game_so + $cxx_so"
     ./lenneth-probe --link-plan "$game_so" "$cxx_so" || echo "WARNING: phase3 two-library linking preflight failed"
+    echo "Phase4 native Linux GLES2/EGL provider relocation plan: $game_so + $cxx_so"
+    ./lenneth-probe --host-plan "$game_so" "$cxx_so" || echo "WARNING: phase4 host GLES/EGL linking preflight failed"
 else
     echo "[lenneth link] skipped: requires original libMyGame.so and libc++_shared.so; no commercial binary is bundled"
 fi
