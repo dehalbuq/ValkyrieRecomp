@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1 and 2. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1, 2 and 3. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -145,3 +145,55 @@ Next engineering milestone: replace the unresolved symbol counts with a
 safe provider-resolution table, port the Bionic ABI mapping and minimal
 JNI/AAssetManager scaffolding for v1.0.7 and validate on physical
 hardware **before enabling constructors or executable mappings**.
+
+## Phase 3: cross-library AArch64 relocation linking
+
+The physical R36S validated the phase-2 Linux mapping with the genuine
+Square Enix v1.0.7 `libMyGame.so` and `libc++_shared.so`:
+
+- Game: `relative_applied=12357`; `external_pending=12423`,
+  `absolute_pending=18605`, mapped image 12.57 MiB.
+- Android libc++: `relative_applied=1187`,
+  `external_pending=543`, `absolute_pending=1778`.
+- GLES2 3.2 / Mali-G31, SDL2 gamepad, ALSA and Start+Select still work.
+- `libRMS.so` was **not listed** in the game's `DT_NEEDED` set of ten
+  libraries, so we defer investigating its atypical program header.
+
+An offline symbol-name comparison of these two original ARM64 libraries
+found that **85 of 353 unique imported symbols in `libMyGame.so`**
+are provided by `libc++_shared.so`. The other ~268 distinct imported
+symbols include **97 GLES2/EGL**, **20 Bionic pthread**, **11 Android
+asset-manager**, **5 OpenSL ES**, **3 Android logging**, **2 C++ ABI** and
+**130 libc/libm/dl or Bionic helper** names. These are *API categories*,
+not claims that an ABI-safe Linux implementation is already available.
+
+The new `--link-plan libMyGame.so libc++_shared.so` command:
+
+- Simultaneously maps **both original Android ELF64 modules** into
+  separate, bounded, read/write-only Linux memory ranges.
+- Parses their dynamic symbols and relocation tables.
+- Applies `R_AARCH64_RELATIVE` and in-module
+  `R_AARCH64_ABS64/GLOB_DAT/JUMP_SLOT` references.
+- Applies cross-module symbol-address references resolved through
+  `libc++_shared.so`; reports unresolved Android-provider references.
+- Displays distinct missing symbol categories for actual Bionic/JNI/
+  GLES2/OpenSL/AAssetManager implementation planning.
+- Exits and frees the mappings. **Neither module is executable**; no
+  JNI_OnLoad, init arrays, game code, billing or asset access occurs.
+
+To test, install the latest phase-3 PortMaster artifact from
+[GitHub Actions](../../actions/workflows/lenneth-r36s.yml) and place
+your own licensed `libMyGame.so` and `libc++_shared.so` in
+`ports/lenneth-r36s/`. Launch the existing Ports menu test.
+The log should show `[lenneth link] PHASE3=PASS` followed by the
+same 30-second GPU test; share **only** `lenneth-r36s.log`.
+
+### Next step
+
+Implement a Linux import-provider registry and Bionic-compatible
+memory, thread, file and TLS wrappers. Prefer correctly typed
+native GLES2/EGL bindings, and implement JNI/AAssetManager/OpenSL
+with the Cocos2d-x interface only as those dependencies are validated.
+The full loader must initialize constructors only after all
+required relocations, memory-protection and ABI checks pass.
+No performance or playable-game claim can be made at this stage.
