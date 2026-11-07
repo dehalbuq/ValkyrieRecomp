@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 8: ONE full diagnostic run, compact reports.
+# Lenneth R36S phase 9: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,11 +12,12 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 8 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 9 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
 echo "[lenneth suite] This does NOT execute commercial game code."
+echo "[lenneth suite] Experimental pthread guest-object adapters and extra libc/libm functions enabled in this batch."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
