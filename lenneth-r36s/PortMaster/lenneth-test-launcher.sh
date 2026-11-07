@@ -38,6 +38,8 @@ for so in libMyGame.so lib/arm64-v8a/libMyGame.so libRMS.so lib/arm64-v8a/libRMS
     if [ -f "$so" ]; then
         echo "Native ELF metadata audit: $so"
         ./lenneth-probe --inspect "$so" || echo "WARNING: ELF audit failed for $so"
+        echo "ELF mapped load / relative relocations: $so"
+        ./lenneth-probe --preflight "$so" || echo "WARNING: read-only ELF mapping preflight failed for $so"
     fi
 done
 echo "Entering GLES2 hardware test (automatically quits after 30 seconds)."
