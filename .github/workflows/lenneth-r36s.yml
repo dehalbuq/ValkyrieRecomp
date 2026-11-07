@@ -1,10 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase20 restricted fdopen syscall and full ABI multi-suite
+name: Lenneth Android R36S - ARM64 phase21 guest PHDR + shell guard multi-suite
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
+      - port/lenneth-phase21-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -742,6 +743,51 @@ jobs:
             exit 1
           fi
 
+      - name: Phase21 guest ELF PHDR callback and restricted system ABI tests
+        run: |
+          ./build-lenneth/lenneth-probe --phase21-selftest | tee lenneth-phase21-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase21-fixture.txt
+          grep -q 'guest_phdr_modules=2' lenneth-phase21-fixture.txt
+          grep -q 'phdr_legacy_bytes=32' lenneth-phase21-fixture.txt
+          grep -q 'callback_stop=PASS' lenneth-phase21-fixture.txt
+          grep -q 'system_execution=DENIED' lenneth-phase21-fixture.txt
+          cat > /tmp/lenneth_phase21_mock.c <<'EOF'
+          #define _GNU_SOURCE
+          #include <link.h>
+          #include <stddef.h>
+          #include <stdint.h>
+          #include <stdlib.h>
+          extern unsigned char __sF[];
+          static int (*volatile fn_phdr)(int (*)(struct dl_phdr_info*,size_t,void*),void*)=dl_iterate_phdr;
+          static int (*volatile fn_system)(const char*)=system;
+          static int visitor(struct dl_phdr_info *info,size_t size,void *data){
+            (void)data;
+            return info && info->dlpi_phdr && info->dlpi_phnum && size>=32?0:42;
+          }
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved){
+            (void)vm;(void)reserved;
+            volatile unsigned char blocked=__sF[0];
+            return (int)blocked + fn_phdr(visitor,NULL) + fn_system(NULL);
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase21_game.so /tmp/lenneth_phase21_mock.c
+          mkdir -p assets saves
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase21_game.so /tmp/phase3_partner.so | tee lenneth-phase21-batch.txt
+          grep -q 'PHASE21_LINK=PASS' lenneth-phase21-batch.txt
+          grep -Eq 'phase21_abi_shims=[1-9][0-9]*' lenneth-phase21-batch.txt
+          grep -q 'Phase21 guest-only dl_iterate_phdr and denied system fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase21-batch.txt
+          grep -q '__sF' lenneth-blockers.tsv
+          if grep -E 'dl_iterate_phdr|system' lenneth-blockers.tsv; then
+            echo "ERROR: Phase21 bindings still unresolved"
+            exit 1
+          fi
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid ELF accepted in Phase21"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -756,13 +802,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase20-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase20-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase20-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase21-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase21-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase21-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase20
-          path: lenneth-r36s-multitest-phase20-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase21
+          path: lenneth-r36s-multitest-phase21-arm64.zip
           if-no-files-found: error
           retention-days: 14
