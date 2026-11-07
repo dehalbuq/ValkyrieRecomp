@@ -98,4 +98,47 @@ replace_once(
     "R36S hardware SDL renderer diagnostics/fallback",
 )
 
+replace_once(
+    '    std::fprintf(stderr, "psxrecomp: main() entered\\n");\\n'
+    '    std::fflush(stderr);',
+    '    std::fprintf(stderr, "psxrecomp: main() entered\\n");\\n'
+    '    std::fflush(stderr);\\n'
+    '    r36s_boot_profile_mark("runtime-main");',
+    "R36S initial boot timestamp",
+)
+replace_once(
+    '    cpu.pc = 0xBFC00000u;\\n'
+    '    cpu.cop0[12] = 0x00400000u;',
+    '    cpu.pc = 0xBFC00000u;\\n'
+    '    r36s_boot_profile_mark("guest-reset");\\n'
+    '    cpu.cop0[12] = 0x00400000u;',
+    "R36S guest BIOS reset timestamp",
+)
+replace_once(
+    '    SDL_Rect src = { 0, 0, src_w, src_h };\\n'
+    '    SDL_UpdateTexture(sdl_texture, &src, sdl_pixel_buf,',
+    '    SDL_Rect src = { 0, 0, src_w, src_h };\\n'
+    '    r36s_boot_present_probe(sdl_pixel_buf, src_w, src_h);\\n'
+    '    SDL_UpdateTexture(sdl_texture, &src, sdl_pixel_buf,',
+    "R36S first display / first color probe",
+)
+
 target.write_text(source, encoding="utf-8-sig")
+
+fntrace_target = root / "psxrecomp/runtime/src/fntrace.c"
+fntrace = fntrace_target.read_text(encoding="utf-8-sig")
+fn_include = '#include "fntrace.h"\\n'
+fn_include_patch = '#include "fntrace.h"\\n#ifdef VALKYRIE_R36S\\n#include "r36s_exit_menu.h"\\n#endif\\n'
+if fn_include_patch not in fntrace:
+    if fntrace.count(fn_include) != 1:
+        raise SystemExit("[R36S] fntrace include anchor changed")
+    fntrace = fntrace.replace(fn_include, fn_include_patch, 1)
+fn_marker = '    s_game_started = 1;\\n'
+fn_patch = '    s_game_started = 1;\\n#ifdef VALKYRIE_R36S\\n    r36s_boot_profile_mark("game-entry");\\n#endif\\n'
+if fn_patch not in fntrace:
+    if fntrace.count(fn_marker) != 1:
+        raise SystemExit("[R36S] fntrace game-entry anchor changed")
+    fntrace = fntrace.replace(fn_marker, fn_patch, 1)
+fntrace_target.write_text(fntrace, encoding="utf-8-sig")
+print("[R36S] fntrace game-entry milestone installed")
+
