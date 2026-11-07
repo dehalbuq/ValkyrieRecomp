@@ -36,6 +36,7 @@
 #include "compat_phase19.h"
 #include "compat_phase20.h"
 #include "bionic_linker21.h"
+#include "compat_phase23.h"
 #include <sys/stat.h>
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
@@ -57,6 +58,7 @@ static int g_phase19_binding_enabled=0;
 static int g_phase20_binding_enabled=0;
 static int g_phase21_binding_enabled=0;
 static int g_legacy_stdio22_binding_enabled=0;
+static int g_legacy_jmp23_binding_enabled=0;
 typedef struct {
     const char *label;
     uint8_t *raw, *image;
@@ -70,7 +72,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, host_stdio, host_opensl, host_compat, host_locale18, host_phase19, host_phase20, host_phase21, host_stdio_data22, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, host_stdio, host_opensl, host_compat, host_locale18, host_phase19, host_phase20, host_phase21, host_stdio_data22, host_legacy_jmp23, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -235,6 +237,19 @@ static const char *symname(const Module *m,size_t idx) {
     if(off>=m->string_size)return NULL;
     const char *p=m->strings+off;
     return memchr(p,0,m->string_size-off)?p:NULL;
+}
+/* Conservative legacy ABI gate: the deprecated Bionic __sF data import
+ * is direct evidence of an Android 5-era guest and its old jmp_buf ABI. */
+static int imports_legacy_std(const Module *m){
+    for(size_t i=0;i<m->count;i++){
+        const Elf64_Sym *sym=&m->syms[i];
+        if(sym->st_shndx!=SHN_UNDEF)continue;
+        const char *name=symname(m,i);
+        if(name && !strcmp(name,"__sF") &&
+           (ELF64_ST_TYPE(sym->st_info)==STT_OBJECT ||
+            ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE))return 1;
+    }
+    return 0;
 }
 static int exported(const Elf64_Sym *s) {
     int type=ELF64_ST_TYPE(s->st_info);
@@ -472,6 +487,11 @@ static int relocate_table(Module *m,Module *partner,
                        ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
                       lenneth_bionic_stdio_data_lookup(name,&value)){
                 st->host_stdio_data22++;
+            } else if(g_legacy_jmp23_binding_enabled &&
+                      (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+                       ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+                      lenneth_phase23_legacy_jmp_lookup(name,&value)){
+                st->host_legacy_jmp23++;
             } else {
                 st->unresolved++;
                 continue;
@@ -569,7 +589,11 @@ static size_t dump_blockers(FILE *out,const Module *m,const Module *partner){
             (g_legacy_stdio22_binding_enabled &&
              (ELF64_ST_TYPE(sym->st_info)==STT_OBJECT ||
               ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
-             lenneth_bionic_stdio_data_lookup(name,&address)))continue;
+             lenneth_bionic_stdio_data_lookup(name,&address)) ||
+            (g_legacy_jmp23_binding_enabled &&
+             (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
+              ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
+             lenneth_phase23_legacy_jmp_lookup(name,&address)))continue;
         const char *risk=category(name);
         const char *strength=ELF64_ST_BIND(sym->st_info)==STB_WEAK?
                              "weak_optional":"strong_or_other";
@@ -671,6 +695,10 @@ static size_t unresolved_import_names(const Module *m,
            (ELF64_ST_TYPE(s->st_info)==STT_OBJECT ||
             ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
            lenneth_bionic_stdio_data_lookup(name,&addr))continue;
+        if(g_legacy_jmp23_binding_enabled &&
+           (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+            ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+           lenneth_phase23_legacy_jmp_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -706,6 +734,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     g_phase20_binding_enabled=(provider_mode>=16);
     g_phase21_binding_enabled=(provider_mode>=17);
     g_legacy_stdio22_binding_enabled=(provider_mode>=18);
+    g_legacy_jmp23_binding_enabled=0;
     if(provider_mode>=1)provider_init();
     if(provider_mode>=2)lenneth_portable_open();
     if(provider_mode>=3){
@@ -723,6 +752,13 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
        !load_file(&game,"libMyGame",game_path)) {
         fprintf(stderr,"[lenneth link] load failed; stopping without calling anything\n");
         goto cleanup;
+    }
+    if(provider_mode>=19){
+        g_legacy_jmp23_binding_enabled=imports_legacy_std(&game);
+        printf("[lenneth phase23] guest_legacy_bionic=%s "
+               "abi_evidence=__sF_in_libMyGame "
+               "host_jmpbuf_bridge=NEVER modern_android=UNSUPPORTED\n",
+               g_legacy_jmp23_binding_enabled?"ELIGIBLE":"NOT_CONFIRMED");
     }
     if(provider_mode>=17){
         /* load_file already validated PHDR count and bounds. Register only
@@ -828,6 +864,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    " phase20_abi_shims=%" PRIu64
                    " phase21_abi_shims=%" PRIu64
                    " legacy___sF_data22_shims=%" PRIu64
+                   " phase23_jmp_slots=%" PRIu64
                    " unresolved_sites=%" PRIu64
                    " missing_name_entries=%zu unsupported_types=%" PRIu64
                    " guest_execution=NO\n",
@@ -851,10 +888,19 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    gs.host_phase20+cs.host_phase20,
                    gs.host_phase21+cs.host_phase21,
                    gs.host_stdio_data22+cs.host_stdio_data22,
+                   gs.host_legacy_jmp23+cs.host_legacy_jmp23,
                    gs.unresolved+cs.unresolved,
                    missing_game+missing_cxx,
                    gs.unsupported+cs.unsupported);
         }
+        if(provider_mode>=19)
+            printf("[lenneth phase23] PHASE23_LINK=PASS "
+                   "jmp_slots=%" PRIu64 " unresolved_sites=%" PRIu64
+                   " guest_legacy_abi_gate=%s synthetic_jumps=TESTED"
+                   " engine_executed=NO\n",
+                   gs.host_legacy_jmp23+cs.host_legacy_jmp23,
+                   gs.unresolved+cs.unresolved,
+                   g_legacy_jmp23_binding_enabled?"ACCEPTED":"REJECTED");
         if(provider_mode>=18)
             printf("[lenneth phase22] PHASE22_LINK=PASS "
                    "__sF_data_slots=%" PRIu64 " unresolved_sites=%" PRIu64
@@ -1008,6 +1054,7 @@ cleanup:
     g_phase20_binding_enabled=0;
     g_phase21_binding_enabled=0;
     g_legacy_stdio22_binding_enabled=0;
+    g_legacy_jmp23_binding_enabled=0;
     lenneth_phase21_clear();
     if(provider_mode>=10){lenneth_saveops_close();lenneth_ndk_dl_close_all();}
     if(provider_mode>=9)lenneth_fd_provider_close();
@@ -1197,4 +1244,7 @@ int lenneth_batch_phase21_plan(const char *game_path,const char *cxx_path){
 }
 int lenneth_batch_phase22_plan(const char *game_path,const char *cxx_path){
     return lenneth_link_preflight_mode(game_path,cxx_path,18);
+}
+int lenneth_batch_phase23_plan(const char *game_path,const char *cxx_path){
+    return lenneth_link_preflight_mode(game_path,cxx_path,19);
 }
