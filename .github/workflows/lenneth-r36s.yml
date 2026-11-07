@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase5 portable provider preflight
+name: Lenneth Android R36S - ARM64 phase6 Android asset provider preflight
 
 on:
   workflow_dispatch:
@@ -136,6 +136,41 @@ jobs:
             exit 1
           fi
 
+      - name: Phase6 test standalone read-only AAsset bridge and ELF import binding
+        run: |
+          mkdir -p /tmp/lenneth-fixture/dir
+          printf 'Synthetic Lenneth asset fixture\n' > /tmp/lenneth-fixture/fixture.txt
+          printf 'Nested file\n' > /tmp/lenneth-fixture/dir/scene.txt
+          ln -s /etc /tmp/lenneth-fixture/symlink-to-etc
+          ./build-lenneth/lenneth-probe --asset-selftest /tmp/lenneth-fixture fixture.txt | tee lenneth-asset-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-asset-fixture.txt
+          cat > /tmp/lenneth_asset_mock.c <<'EOF'
+          #include <stddef.h>
+          extern void *AAssetManager_fromJava(void *,void *);
+          extern void *AAssetManager_open(void *,const char *,int);
+          extern int AAsset_read(void *,void *,size_t);
+          extern void AAsset_close(void *);
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *reserved) {
+            (void)reserved;
+            char data[20];
+            void *m=AAssetManager_fromJava(vm,0);
+            void *a=AAssetManager_open(m,"fixture.txt",2);
+            if(!a)return -1;
+            int r=AAsset_read(a,data,sizeof(data));
+            AAsset_close(a);
+            return r;
+          }
+          EOF
+          cc -shared -fPIC -O2 -o /tmp/phase6_game.so /tmp/lenneth_asset_mock.c
+          mkdir -p assets
+          ./build-lenneth/lenneth-probe --asset-plan /tmp/phase6_game.so /tmp/phase3_partner.so | tee lenneth-assetplan-test.txt
+          grep -q 'PHASE6=PASS' lenneth-assetplan-test.txt
+          grep -Eq 'host_asset_slots=[1-9][0-9]*' lenneth-assetplan-test.txt
+          if ./build-lenneth/lenneth-probe --asset-plan /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid ELF was accepted by AAsset provider plan"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -148,13 +183,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-phase5-arm64.zip ports)
-          sha256sum lenneth-r36s-phase5-arm64.zip
-          ls -lh lenneth-r36s-phase5-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-phase6-arm64.zip ports)
+          sha256sum lenneth-r36s-phase6-arm64.zip
+          ls -lh lenneth-r36s-phase6-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Phase5
-          path: lenneth-r36s-phase5-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Phase6
+          path: lenneth-r36s-phase6-arm64.zip
           if-no-files-found: error
           retention-days: 14
