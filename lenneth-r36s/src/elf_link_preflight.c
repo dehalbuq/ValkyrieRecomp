@@ -351,7 +351,8 @@ static int relocate_table(Module *m,Module *partner,
                       lenneth_portable_lookup(name,&value)) {
                 st->host_portable++;
             } else if(g_asset_binding_enabled &&
-                      ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
+                      (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+                       ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
                       lenneth_asset_lookup(name,&value)) {
                 st->host_assets++;
             } else {
@@ -387,7 +388,8 @@ static size_t unresolved_import_names(const Module *m,
         if(ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
            lenneth_portable_lookup(name,&addr))continue;
         if(g_asset_binding_enabled &&
-           ELF64_ST_TYPE(s->st_info)==STT_FUNC &&
+           (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+            ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
            lenneth_asset_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
