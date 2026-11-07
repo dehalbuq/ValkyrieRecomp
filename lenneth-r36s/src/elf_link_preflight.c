@@ -252,8 +252,12 @@ static void *open_graphics(const char *primary,const char *fallback) {
     return h;
 }
 static int is_graphics_symbol(const char *name) {
-    return name && (strncmp(name,"gl",2)==0 ||
-                    strncmp(name,"egl",3)==0);
+    if(!name)return 0;
+    /* Exclude unrelated libc names beginning with "gl", such as glob. */
+    if(name[0]=='g' && name[1]=='l' &&
+       name[2]>='A' && name[2]<='Z')return 1;
+    return name[0]=='e' && name[1]=='g' && name[2]=='l' &&
+           name[3]>='A' && name[3]<='Z';
 }
 static void provider_init(void) {
     memset(&g_provider,0,sizeof(g_provider));
@@ -289,8 +293,7 @@ static int graphics_lookup(const char *name,uint64_t *value) {
 
 static const char *category(const char *s) {
     if(!s || !*s)return "unnamed";
-    if((s[0]=='g' && s[1]=='l') ||
-       strncmp(s,"egl",3)==0)return "GLES2/EGL";
+    if(is_graphics_symbol(s))return "GLES2/EGL";
     if(strncmp(s,"AAsset",6)==0)return "Android AAssetManager";
     if(strncmp(s,"SL_IID_",7)==0 ||
        strcmp(s,"slCreateEngine")==0)return "OpenSL ES";
@@ -298,7 +301,7 @@ static const char *category(const char *s) {
     if(strncmp(s,"__android_",10)==0 ||
        strncmp(s,"android_",8)==0)return "Android logging/NDK";
     if(strncmp(s,"__cxa_",6)==0 ||
-       s[0]=='_' && s[1]=='Z')return "C++ ABI";
+       (s[0]=='_' && s[1]=='Z'))return "C++ ABI";
     return "Bionic/libc/libm/dl";
 }
 static int relocate_table(Module *m,Module *partner,
