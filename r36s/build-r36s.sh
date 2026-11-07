@@ -68,6 +68,9 @@ if [ "$MODE" = --build ] || [ "$MODE" = --all ]; then
     have aarch64-linux-gnu-g++
     have pkg-config
 
+    # Fix a C11 label-before-declaration error in the pinned PSXRecomp runtime.
+    bash r36s/apply-psxrecomp-patches.sh
+
     say "Configuring the real AArch64 game build (not a setup-only host)..."
     cmake --preset r36s-arm64-release
     say "Cross-compiling for Cortex-A35; this can use substantial HOST RAM/disk..."
