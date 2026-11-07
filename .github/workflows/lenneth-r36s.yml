@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase8 multitest suite
+name: Lenneth Android R36S - ARM64 phase9 multi-ABI suite
 
 on:
   workflow_dispatch:
@@ -221,6 +221,45 @@ jobs:
             exit 1
           fi
 
+      - name: Phase9 test Bionic pthread guest-object shims and combined ARM64 resolver
+        run: |
+          ./build-lenneth/lenneth-probe --threads-selftest | tee lenneth-bionic-thread-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-bionic-thread-fixture.txt
+          cat > /tmp/lenneth_thread_mock.c <<'EOF'
+          /* Synthetic AArch64 Android-style imports. Code is NEVER executed by the linker. */
+          extern int pthread_mutex_lock(void*);
+          extern int pthread_mutex_unlock(void*);
+          extern int pthread_mutex_init(void*,const void*);
+          extern int pthread_cond_signal(void*);
+          extern int pthread_cond_wait(void*,void*);
+          extern void *pthread_getspecific(unsigned int);
+          extern int pthread_setspecific(unsigned int,const void*);
+          static int guest_mutex,guest_cond;
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *reserved){
+            (void)vm;(void)reserved;
+            int n=pthread_mutex_init(&guest_mutex,0);
+            n+=pthread_mutex_lock(&guest_mutex);
+            n+=pthread_cond_signal(&guest_cond);
+            n+=pthread_setspecific(0,pthread_getspecific(0));
+            n+=pthread_cond_wait(&guest_cond,&guest_mutex);
+            n+=pthread_mutex_unlock(&guest_mutex);
+            return n;
+          }
+          EOF
+          cc -shared -fPIC -O2 -o /tmp/phase9_game.so /tmp/lenneth_thread_mock.c
+          mkdir -p assets
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase9_game.so /tmp/phase3_partner.so | tee lenneth-phase9-batch-test.txt
+          grep -q 'PHASE9_LINK=PASS' lenneth-phase9-batch-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase9-batch-test.txt
+          grep -Eq 'host_thread_slots=[1-9][0-9]*' lenneth-phase9-batch-test.txt
+          grep -q 'BATCH_LINK=PASS single_mapping_pass=1' lenneth-phase9-batch-test.txt
+          grep -q 'FINAL=PASS' lenneth-phase9-batch-test.txt
+          grep -q 'Bionic pthread/cond/TLS synthetic fixtures: PASS' lenneth-suite-summary.txt
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid ELF passed phase9 batch"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -233,13 +272,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase8-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase8-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase8-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase9-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase9-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase9-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase8
-          path: lenneth-r36s-multitest-phase8-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase9
+          path: lenneth-r36s-multitest-phase9-arm64.zip
           if-no-files-found: error
           retention-days: 14
