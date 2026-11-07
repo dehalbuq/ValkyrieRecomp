@@ -903,7 +903,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
         if(provider_mode>=11)
             printf("[lenneth stdio] PHASE14_LINK=PASS guest_FILE_proxy_slots=%" PRIu64
                    " outstanding_import_sites=%" PRIu64
-                   " legacy___sF_and_OpenSLES=UNRESOLVED "
+                   " legacy___sF=PHASE22_BOUND OpenSLES=SYNTHETIC "
                    "commercial_execution=NO\n",
                    gs.host_stdio+cs.host_stdio,
                    gs.unresolved+cs.unresolved);
@@ -911,7 +911,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
             printf("[lenneth ndk-dl] PHASE13_LINK=PASS restricted_dl_slots=%" PRIu64
                    " safe_saveops_slots=%" PRIu64
                    " outstanding_import_sites=%" PRIu64
-                   " guest_dl_iterate_phdr_FILE_OpenSLES=NOT_READY "
+                   " guest_dl_iterate_phdr=PHASE21_BOUND FILE=PHASE22_BOUND OpenSLES=SYNTHETIC "
                    "commercial_execution=NO\n",
                    gs.host_dl+cs.host_dl,
                    gs.host_saveops+cs.host_saveops,
