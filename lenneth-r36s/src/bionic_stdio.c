@@ -91,6 +91,27 @@ static void *guest_fopen(const char *path,const char *mode){
     if(!host){int e=errno;close(fd);errno=e;return NULL;}
     return allocate_slot(host);
 }
+/* Phase20: fdopen is mediated by an existing sandboxed descriptor; no glibc
+ * FILE* crosses the guest ABI. We preserve POSIX ownership on success. */
+static void *guest_fdopen(int fd,const char *mode){
+    int flags=0;
+    if(!parse_mode(mode,&flags) || !lenneth_fd_is_guest_regular(fd))return NULL;
+    /* Existing fdopen should not accept create-exclusive semantics. */
+    if(strchr(mode,'x')){errno=EINVAL;return NULL;}
+    int current=fcntl(fd,F_GETFL);
+    if(current<0)return NULL;
+    int access=current&O_ACCMODE;
+    int requested=flags&O_ACCMODE;
+    if((requested==O_RDONLY && access==O_WRONLY) ||
+       (requested==O_WRONLY && access==O_RDONLY) ||
+       (requested==O_RDWR && access!=O_RDWR)){
+        errno=EBADF;return NULL;
+    }
+    FILE *host=fdopen(fd,mode);
+    if(!host)return NULL;
+    return allocate_slot(host);
+}
+
 static int guest_fclose(void *stream){
     pthread_mutex_lock(&lock);
     GuestStream *slot=get_slot(stream);
@@ -189,7 +210,7 @@ static int guest_fprintf(void *stream,const char *fmt,...){
 typedef struct {const char *name;void(*fn)(void);} Symbol;
 #define X(name,fn) {name,(void(*)(void))(fn)}
 static const Symbol api[]={
-    X("fopen",guest_fopen),X("fclose",guest_fclose),
+    X("fopen",guest_fopen),X("fdopen",guest_fdopen),X("fclose",guest_fclose),
     X("fread",guest_fread),X("fwrite",guest_fwrite),
     X("fseek",guest_fseek),X("ftell",guest_ftell),
     X("ferror",guest_ferror),X("clearerr",guest_clearerr),
@@ -236,6 +257,31 @@ int lenneth_bionic_stdio_selftest(void){
         if(guest_fileno(guest)<0 || guest_ferror(guest))ok=0;
         if(guest_fclose(guest)!=0 || guest_fclose(guest)!=EOF)ok=0;
     }
+    /* Phase20: permitted FD, foreign FD, wrong mode and invalid descriptor. */
+    int fd=lenneth_fd_open_guest_path("assets/input.txt",O_RDONLY,0);
+    if(fd<0)ok=0;
+    else{
+        guest=guest_fdopen(fd,"rb");
+        if(!guest) {ok=0;close(fd);}
+        else {
+            char buf[16]={0};
+            if(guest_fread(buf,1,9,guest)!=9 || memcmp(buf,"SYNTHETIC",9) ||
+               guest_fileno(guest)!=fd || guest_fclose(guest)!=0)ok=0;
+        }
+    }
+    fd=open("/etc/passwd",O_RDONLY|O_CLOEXEC);
+    if(fd>=0){
+        if(guest_fdopen(fd,"rb")!=NULL)ok=0;
+        close(fd);
+    }
+    fd=lenneth_fd_open_guest_path("saves/progress.txt",O_RDONLY,0);
+    if(fd<0)ok=0;
+    else{
+        if(guest_fdopen(fd,"wb")!=NULL)ok=0;
+        if(guest_fdopen(fd,"rbx")!=NULL)ok=0;
+        close(fd);
+    }
+    if(guest_fdopen(-1,"rb")!=NULL)ok=0;
     if(guest_fopen("/etc/passwd","rb")!=NULL)ok=0;
     if(guest_fopen("assets/../saves/progress.txt","wb")!=NULL)ok=0;
     if(guest_fopen("assets/input.txt","wb")!=NULL)ok=0;
@@ -254,6 +300,7 @@ int lenneth_bionic_stdio_selftest(void){
     if(guest_fread(NULL,1,3,(void*)(uintptr_t)1)!=0)ok=0;
     uint64_t addr=0;
     if(!lenneth_bionic_stdio_lookup("fopen",&addr) || !addr ||
+       !lenneth_bionic_stdio_lookup("fdopen",&addr) || !addr ||
        lenneth_bionic_stdio_lookup("__sF",&addr) ||
        lenneth_bionic_stdio_lookup("system",&addr))ok=0;
     lenneth_fd_provider_close();
