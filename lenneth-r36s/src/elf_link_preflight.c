@@ -597,13 +597,13 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    missing_game+missing_cxx,
                    gs.unsupported+cs.unsupported);
         }
-        if(provider_mode==8)
+        if(provider_mode>=8)
             printf("[lenneth cxx] PHASE11_LINK=PASS cxx_lifecycle_slots=%" PRIu64
                    " pending_sites=%" PRIu64
                    " CXX_destructors_not_called=1 commercial_execution=NO\n",
                    gs.host_cxx_lifecycle+cs.host_cxx_lifecycle,
                    gs.unresolved+cs.unresolved);
-        if(provider_mode==7)
+        if(provider_mode>=7)
             printf("[lenneth fortify] PHASE10_LINK=PASS checked_memory_errno_slots=%" PRIu64
                    " unresolved_sites=%" PRIu64
                    " runtime_stdio_dynloader_OpenSLES=NOT_READY "
