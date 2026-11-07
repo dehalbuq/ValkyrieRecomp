@@ -6,7 +6,7 @@ cd "$root" || exit 1
 log="$root/lenneth-r36s.log"
 if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 exec >> "$log" 2>&1
-echo "=== Lenneth Android R36S PHASE 1 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth Android R36S PHASE 3 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "This binary is a native EGL/GLES2/gamepad/audio/ELF diagnostic, NOT the commercial game."
@@ -42,6 +42,20 @@ for so in libMyGame.so lib/arm64-v8a/libMyGame.so libc++_shared.so lib/arm64-v8a
         ./lenneth-probe --preflight "$so" || echo "WARNING: read-only ELF mapping preflight failed for $so"
     fi
 done
+game_so=""
+cxx_so=""
+for target in libMyGame.so lib/arm64-v8a/libMyGame.so; do
+    if [ -f "$target" ]; then game_so="$target"; break; fi
+done
+for target in libc++_shared.so lib/arm64-v8a/libc++_shared.so; do
+    if [ -f "$target" ]; then cxx_so="$target"; break; fi
+done
+if [ -n "$game_so" ] && [ -n "$cxx_so" ]; then
+    echo "Phase3 two-module relocation/link plan: $game_so + $cxx_so"
+    ./lenneth-probe --link-plan "$game_so" "$cxx_so" || echo "WARNING: phase3 two-library linking preflight failed"
+else
+    echo "[lenneth link] skipped: requires original libMyGame.so and libc++_shared.so; no commercial binary is bundled"
+fi
 echo "Entering GLES2 hardware test (automatically quits after 30 seconds)."
 echo "Exit earlier by START+SELECT held 2.5s, then A; or press F10."
 ./lenneth-probe --video --seconds 30
