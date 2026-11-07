@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase7 logging JNI preflight
+name: Lenneth Android R36S - ARM64 phase8 multitest suite
 
 on:
   workflow_dispatch:
@@ -204,6 +204,23 @@ jobs:
             exit 1
           fi
 
+      - name: Phase8 one-run batch diagnostics (all providers + JNI + asset/log fixtures)
+        run: |
+          mkdir -p assets
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase7_game.so /tmp/phase3_partner.so | tee lenneth-batch-headless-test.txt
+          grep -q 'BATCH_LINK=PASS single_mapping_pass=1' lenneth-batch-headless-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-batch-headless-test.txt
+          grep -q 'bridge=JNI_OnLoad present=1 invoked=0' lenneth-batch-headless-test.txt
+          grep -q 'FINAL=PASS' lenneth-batch-headless-test.txt
+          grep -q 'Overall diagnostic: PASS' lenneth-suite-summary.txt
+          grep -q 'GLES2/ALSA/gamepad environment: SKIPPED_CI' lenneth-suite-summary.txt
+          test -s lenneth-blockers.tsv
+          grep -q '^module' lenneth-blockers.tsv
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: malformed ELF passed batch suite"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -216,13 +233,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-phase7-arm64.zip ports)
-          sha256sum lenneth-r36s-phase7-arm64.zip
-          ls -lh lenneth-r36s-phase7-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase8-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase8-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase8-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Phase7
-          path: lenneth-r36s-phase7-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase8
+          path: lenneth-r36s-multitest-phase8-arm64.zip
           if-no-files-found: error
           retention-days: 14
