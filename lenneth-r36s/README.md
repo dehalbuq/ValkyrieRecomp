@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phase 1. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1 and 2. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -100,3 +100,48 @@ distributed under MIT (see `LICENSE`). Future use of third-party
 code must retain its original license and credit. The Valkyrie Profile
 name, game, artwork, commercial code, and assets belong to their
 respective owners.
+
+## Phase 2: Android AArch64 ELF map preflight
+
+The owner's private Square Enix **v1.0.7** libraries were inspected locally.
+They were **not** committed or uploaded to GitHub:
+
+| Library | Architecture | Notable facts |
+| --- | --- | --- |
+| `libMyGame.so` | ARM64 (NDK r21e) | ~11.1 MiB, valid dynamic ELF, exposes `JNI_OnLoad`, `cocos_android_app_init`, Cocos2d-x native init/render/touch methods |
+| `libc++_shared.so` | ARM64 (NDK r21e) | ~0.87 MiB, Android C++ standard library |
+| `libRMS.so` | ARM64 | ~0.64 MiB, unusual ELF program-header entry size (17 instead of 56); `readelf` rejects the program-header table; this is **not** proof the library is required or malware |
+
+`libMyGame.so` imports 353 unique external symbols, including 96
+`gl*` functions, 11 `AAsset*` functions, OpenSL ES/JNI and Bionic pthread.
+It also has a large relocation table: 12,357 RELATIVE, 18,605 ABS64,
+3,178 GLOB_DAT and 9,245 JUMP_SLOT entries across its two tables.
+These are real native Android dependencies, **not** runnable by glibc alone.
+
+The new `--preflight <libMyGame.so>` subcommand:
+
+1. Parses and validates the ARM64 ELF program headers.
+2. Reserves a bounded anonymous Linux `mmap` (never executable) and
+   copies `PT_LOAD` segments, including zero-initialized BSS.
+3. Applies only `R_AARCH64_RELATIVE` address fixups.
+4. Reports `ABS64`, `GLOB_DAT`, `JUMP_SLOT` and other unresolved
+   relocations, RSS and missing dependent-provider work.
+5. Unmaps everything. **It does not call constructors, JNI_OnLoad or
+   game code**, does not bypass license checks and requires no data CPKs.
+
+**How to test on R36S:** download the phase-2 artifact
+`Lenneth-Android-R36S-ARM64-Phase2` from the Actions tab and unzip
+the nested `lenneth-r36s-phase2-arm64.zip` into `ports/`.
+Place only your own three Android `.so` files into
+`ports/lenneth-r36s/`, then open **Lenneth Android R36S Test**.
+The existing GLES2/gamepad/audio test still appears and exits normally.
+Share only `ports/lenneth-r36s/lenneth-r36s.log` (no commercial files).
+
+The preflight intentionally reports `libRMS.so` as structurally
+unsupported while its header is malformed. Do **not** patch or
+normalize the file header merely to force it to pass the parser.
+
+Next engineering milestone: replace the unresolved symbol counts with a
+safe provider-resolution table, port the Bionic ABI mapping and minimal
+JNI/AAssetManager scaffolding for v1.0.7 and validate on physical
+hardware **before enabling constructors or executable mappings**.
