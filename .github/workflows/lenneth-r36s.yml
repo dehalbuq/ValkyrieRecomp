@@ -361,8 +361,10 @@ jobs:
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
-          mkdir -p package/ports/lenneth-r36s
+          mkdir -p package/ports/lenneth-r36s/mock
           install -m755 build-lenneth/lenneth-probe package/ports/lenneth-r36s/lenneth-probe
+          install -m644 /tmp/lenneth_mock_guest.so package/ports/lenneth-r36s/mock/synthetic_guest.so
+          install -m644 /tmp/lenneth_mock_partner.so package/ports/lenneth-r36s/mock/synthetic_partner.so
           install -m755 lenneth-r36s/PortMaster/lenneth-test-launcher.sh package/ports/lenneth-r36s/launch.sh
           install -m755 "lenneth-r36s/PortMaster/Lenneth Android R36S Test.sh" "package/ports/Lenneth Android R36S Test.sh"
           install -m644 lenneth-r36s/README.md package/ports/lenneth-r36s/README.md
