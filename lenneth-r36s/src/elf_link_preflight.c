@@ -56,6 +56,7 @@ static int g_locale18_binding_enabled=0;
 static int g_phase19_binding_enabled=0;
 static int g_phase20_binding_enabled=0;
 static int g_phase21_binding_enabled=0;
+static int g_legacy_stdio22_binding_enabled=0;
 typedef struct {
     const char *label;
     uint8_t *raw, *image;
@@ -69,7 +70,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, host_stdio, host_opensl, host_compat, host_locale18, host_phase19, host_phase20, host_phase21, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, host_stdio, host_opensl, host_compat, host_locale18, host_phase19, host_phase20, host_phase21, host_stdio_data22, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -466,6 +467,11 @@ static int relocate_table(Module *m,Module *partner,
                        ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
                       lenneth_phase21_lookup(name,&value)){
                 st->host_phase21++;
+            } else if(g_legacy_stdio22_binding_enabled &&
+                      (ELF64_ST_TYPE(s->st_info)==STT_OBJECT ||
+                       ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+                      lenneth_bionic_stdio_data_lookup(name,&value)){
+                st->host_stdio_data22++;
             } else {
                 st->unresolved++;
                 continue;
@@ -559,7 +565,11 @@ static size_t dump_blockers(FILE *out,const Module *m,const Module *partner){
             (g_phase21_binding_enabled &&
              (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
               ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
-             lenneth_phase21_lookup(name,&address)))continue;
+             lenneth_phase21_lookup(name,&address)) ||
+            (g_legacy_stdio22_binding_enabled &&
+             (ELF64_ST_TYPE(sym->st_info)==STT_OBJECT ||
+              ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
+             lenneth_bionic_stdio_data_lookup(name,&address)))continue;
         const char *risk=category(name);
         const char *strength=ELF64_ST_BIND(sym->st_info)==STB_WEAK?
                              "weak_optional":"strong_or_other";
@@ -657,6 +667,10 @@ static size_t unresolved_import_names(const Module *m,
            (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
             ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
            lenneth_phase21_lookup(name,&addr))continue;
+        if(g_legacy_stdio22_binding_enabled &&
+           (ELF64_ST_TYPE(s->st_info)==STT_OBJECT ||
+            ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+           lenneth_bionic_stdio_data_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -691,6 +705,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     g_phase19_binding_enabled=(provider_mode>=15);
     g_phase20_binding_enabled=(provider_mode>=16);
     g_phase21_binding_enabled=(provider_mode>=17);
+    g_legacy_stdio22_binding_enabled=(provider_mode>=18);
     if(provider_mode>=1)provider_init();
     if(provider_mode>=2)lenneth_portable_open();
     if(provider_mode>=3){
@@ -812,6 +827,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    " phase19_abi_shims=%" PRIu64
                    " phase20_abi_shims=%" PRIu64
                    " phase21_abi_shims=%" PRIu64
+                   " legacy___sF_data22_shims=%" PRIu64
                    " unresolved_sites=%" PRIu64
                    " missing_name_entries=%zu unsupported_types=%" PRIu64
                    " guest_execution=NO\n",
@@ -834,10 +850,18 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    gs.host_phase19+cs.host_phase19,
                    gs.host_phase20+cs.host_phase20,
                    gs.host_phase21+cs.host_phase21,
+                   gs.host_stdio_data22+cs.host_stdio_data22,
                    gs.unresolved+cs.unresolved,
                    missing_game+missing_cxx,
                    gs.unsupported+cs.unsupported);
         }
+        if(provider_mode>=18)
+            printf("[lenneth phase22] PHASE22_LINK=PASS "
+                   "__sF_data_slots=%" PRIu64 " unresolved_sites=%" PRIu64
+                   " bionic_FILE_bytes=152 jmp_imports=UNMAPPED "
+                   "commercial_execution=NO\n",
+                   gs.host_stdio_data22+cs.host_stdio_data22,
+                   gs.unresolved+cs.unresolved);
         if(provider_mode>=17)
             printf("[lenneth phase21] PHASE21_LINK=PASS "
                    "guest_phdr_and_system_slots=%" PRIu64
@@ -983,6 +1007,7 @@ cleanup:
     g_phase19_binding_enabled=0;
     g_phase20_binding_enabled=0;
     g_phase21_binding_enabled=0;
+    g_legacy_stdio22_binding_enabled=0;
     lenneth_phase21_clear();
     if(provider_mode>=10){lenneth_saveops_close();lenneth_ndk_dl_close_all();}
     if(provider_mode>=9)lenneth_fd_provider_close();
@@ -1169,4 +1194,7 @@ int lenneth_batch_phase20_plan(const char *game_path,const char *cxx_path){
 }
 int lenneth_batch_phase21_plan(const char *game_path,const char *cxx_path){
     return lenneth_link_preflight_mode(game_path,cxx_path,17);
+}
+int lenneth_batch_phase22_plan(const char *game_path,const char *cxx_path){
+    return lenneth_link_preflight_mode(game_path,cxx_path,18);
 }
