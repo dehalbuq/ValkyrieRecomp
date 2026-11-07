@@ -1044,3 +1044,12 @@ GitHub Actions tests the 17 entry points with a synthetic AArch64 shared object 
 Adds three reviewed import bindings in the same single-run diagnostic: `stat` and `fstat` convert host filesystem metadata into the **128-byte Android ARM64 stat layout**, with compile-time assertions for offsets, timestamp fields and buffer bounds; `sysconf` explicitly translates Android `_SC_*` numeric values to glibc equivalents. Unknown names yield `EINVAL`. Paths are confined to the existing `assets/` and `saves/` descriptor sandbox and reject symlinks/traversal. The self-test covers real temporary file metadata, canary memory, invalid descriptors/paths and several different Android sysconf codes.
 
 Other blockers including `__sF`, `fdopen`, `setjmp/longjmp`, `setpriority`, `system`, `syscall`, and `dl_iterate_phdr` remain **unmapped** until a verified ABI-safe implementation exists. The commercial game has **not** been executed. All Phase1–18 regression tests stay part of the one-run R36S probe. A GitHub Actions synthetic ELF fixture tests these three imports and ensures the unsafe `__sF` data symbol remains unresolved.
+
+
+## Phase 20 — grouped safe fdopen/process/syscall ABI
+
+Adds `fdopen` to the existing opaque Bionic guest stream adapter, accepting only regular files whose **current kernel descriptor targets** fall beneath active `assets/` or `saves/` roots. Rejects foreign host file descriptors, mismatched modes and invalid descriptors. Guest streams remain opaque tokens; original glibc `FILE*` never crosses the boundary. The adapter requires a mounted `/proc/self/fd` in the system.
+
+Two more symbols are provided with conservative behavior: `setpriority` allows a no-change request concerning **only this process** and rejects any real priority change with `EPERM`; `syscall` supports a finite allowlist of **zero-argument scalar identity queries** (getpid, gettid, UID/GID/parent PID) and returns `ENOSYS` for everything else, deliberately including dangerous system calls. All three adapters and the full previous synthetic suite are exercised once by the PortMaster launcher.
+
+**Important:** These are intentionally partial guest interfaces, NOT complete POSIX emulation. In particular, `syscall(SYS_futex,...)` is not supported and would return `ENOSYS`. This phase reports resolved relocation slots, not actual commercial engine execution; `__sF`, `system`, `setjmp/longjmp`, and `dl_iterate_phdr` remain unmapped. No original APK assets, libraries or music are committed or packaged.
