@@ -376,6 +376,41 @@ static int relocate_table(Module *m,Module *partner,
     }
     return 1;
 }
+/* One complete, privacy-preserving blocker inventory per batch run.
+ * Symbol names only; never dump proprietary code, addresses or game data. */
+static size_t dump_blockers(FILE *out,const Module *m,const Module *partner){
+    size_t count=0;
+    for(size_t i=0;i<m->count;i++){
+        const Elf64_Sym *sym=&m->syms[i];
+        if(sym->st_shndx!=SHN_UNDEF)continue;
+        const char *name=symname(m,i);
+        if(!name||!*name)continue;
+        uint64_t address=0;
+        if(find_export(partner,name,&address) ||
+           graphics_lookup(name,&address) ||
+           (ELF64_ST_TYPE(sym->st_info)==STT_FUNC &&
+            lenneth_portable_lookup(name,&address)) ||
+           (g_asset_binding_enabled &&
+            (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
+             ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
+            lenneth_asset_lookup(name,&address)) ||
+           (g_android_log_binding_enabled &&
+            (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
+             ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
+            lenneth_android_log_lookup(name,&address)))continue;
+        const char *risk=category(name);
+        const char *strength=ELF64_ST_BIND(sym->st_info)==STB_WEAK?
+                             "weak_optional":"strong_or_other";
+        fprintf(out,"%s\t%s\t%s\t",m->label,risk,strength);
+        /* Strip unexpected newlines/tabs in binary symbol names. */
+        for(const unsigned char *p=(const unsigned char*)name;*p;p++)
+            fputc(*p=='\n'||*p=='\r'||*p=='\t'?'_':*p,out);
+        fputc('\n',out);
+        count++;
+    }
+    return count;
+}
+
 static size_t unresolved_import_names(const Module *m,
                                       const Module *partner) {
     size_t n=0;
@@ -459,7 +494,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     size_t missing_cxx=unresolved_import_names(&cxx,&game);
     printf("[lenneth link] unique_pending game=%zu cxx=%zu\n",
            missing_game,missing_cxx);
-    if(provider_mode==4) {
+    if(provider_mode>=4) {
         const char *jni_bridges[]={
             "JNI_OnLoad",
             "cocos_android_app_init",
@@ -477,6 +512,35 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
         }
         printf("[lenneth JNI] exported_entrypoints=%u/%zu calls=0\n",
                found,sizeof(jni_bridges)/sizeof(jni_bridges[0]));
+        if(provider_mode>=5) {
+            FILE *out=fopen("lenneth-blockers.tsv","w");
+            if(out){
+                fputs("module\tcategory\tbinding\tsymbol\n",out);
+                size_t ng=dump_blockers(out,&game,&cxx);
+                size_t nc=dump_blockers(out,&cxx,&game);
+                int write_error=ferror(out);
+                if(fclose(out)!=0)write_error=1;
+                printf("[lenneth suite] blocker_inventory=%s game=%zu cxx=%zu file=lenneth-blockers.tsv\n",
+                       write_error?"WRITE_ERROR":"WRITTEN",ng,nc);
+                if(write_error){rc=8;goto cleanup;}
+            }else{
+                perror("[lenneth suite] cannot write blocker inventory");
+                rc=8;goto cleanup;
+            }
+            printf("[lenneth suite] BATCH_LINK=PASS single_mapping_pass=1 "
+                   "graphics=%" PRIu64 " portable=%" PRIu64
+                   " assets=%" PRIu64 " logging=%" PRIu64
+                   " unresolved_sites=%" PRIu64
+                   " missing_name_entries=%zu unsupported_types=%" PRIu64
+                   " guest_execution=NO\n",
+                   gs.host_gles+cs.host_gles,
+                   gs.host_portable+cs.host_portable,
+                   gs.host_assets+cs.host_assets,
+                   gs.host_logging+cs.host_logging,
+                   gs.unresolved+cs.unresolved,
+                   missing_game+missing_cxx,
+                   gs.unsupported+cs.unsupported);
+        }
         printf("[lenneth android-log] PHASE7=PASS graphics_slots=%" PRIu64
                " portable_slots=%" PRIu64 " asset_slots=%" PRIu64
                " log_slots=%" PRIu64 " host_pending_sites=%" PRIu64
@@ -542,4 +606,7 @@ int lenneth_asset_plan(const char *game_path,const char *cxx_path) {
 }
 int lenneth_logging_plan(const char *game_path,const char *cxx_path) {
     return lenneth_link_preflight_mode(game_path,cxx_path,4);
+}
+int lenneth_batch_plan(const char *game_path,const char *cxx_path) {
+    return lenneth_link_preflight_mode(game_path,cxx_path,5);
 }
