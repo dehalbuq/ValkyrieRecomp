@@ -12,4 +12,6 @@ int lenneth_fd_provider_lookup(const char *name,uint64_t *out);
 int lenneth_fd_provider_selftest(void);
 /* Safe internal call from our own opaque FILE adapter only. */
 int lenneth_fd_open_guest_path(const char *path,int flags,mode_t mode);
+/* Only a regular file currently beneath assets/ or saves/ (Linux /proc fd). */
+int lenneth_fd_is_guest_regular(int fd);
 #endif
