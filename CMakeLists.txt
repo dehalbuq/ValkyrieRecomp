@@ -92,6 +92,16 @@ if(VALKYRIE_R36S)
     set_target_properties(psx-runtime PROPERTIES OUTPUT_NAME "ValkyrieRecomp")
 endif()
 
+# PSXRecomp links pthread only when its optional lobby client is enabled.
+# The single-player Valkyrie runtime still uses pthread_create in main.cpp.
+# Linux/glibc <= 2.33 keeps this in libpthread, so a native AArch64 ELF needs
+# an explicit thread dependency at final link time.
+if(VALKYRIE_R36S)
+    set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+    find_package(Threads REQUIRED)
+    target_link_libraries(psx-runtime PRIVATE Threads::Threads)
+endif()
+
 # Cortex-A35 tuning without -ffast-math or unsafe emulator arithmetic.
 if(VALKYRIE_R36S AND
    CMAKE_C_COMPILER_ID MATCHES "^(GNU|Clang)$" AND
