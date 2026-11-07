@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 19: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 20: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 19 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 20 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -27,7 +27,8 @@ echo "[lenneth suite] Phase15: OpenSL ES ABI remains synthetic (guest PCM not wi
 echo "[lenneth suite] Phase16: native SDL2/ALSA PCM playback fixture retained."
 echo "[lenneth suite] Phase17: sandboxed directory/time/text/logging ABI tests retained."
 echo "[lenneth suite] Phase18: Bionic locale and incremental UTF-8 regression tests retained."
-echo "[lenneth suite] Phase19: Bionic stat/fstat struct conversion and sysconf number translation in the same suite."
+echo "[lenneth suite] Phase19: Bionic stat/fstat and sysconf regression tests retained."
+echo "[lenneth suite] Phase20: sandboxed fdopen, restricted process priority/syscall APIs (no arbitrary shell execution)."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
