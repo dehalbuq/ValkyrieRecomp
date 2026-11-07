@@ -10,6 +10,7 @@
  */
 #define _GNU_SOURCE
 #include <elf.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -32,7 +33,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -229,6 +230,63 @@ static int find_export(const Module *m,const char *name,uint64_t *addr) {
     }
     return 0;
 }
+
+/*
+ * Phase 4 host GLES/EGL provider. Only native graphics symbols are
+ * eligible; Bionic pthread / libc and Android JNI require ABI shims.
+ * The resolved pointers are written to RW *data slots* only. They are
+ * NEVER invoked by this diagnostic.
+ */
+typedef void *(*EglGetProc)(const char *);
+typedef struct {
+    void *gles;
+    void *egl;
+    EglGetProc getproc;
+    int enabled;
+} GlesProvider;
+static GlesProvider g_provider;
+
+static void *open_graphics(const char *primary,const char *fallback) {
+    void *h=dlopen(primary,RTLD_NOW|RTLD_LOCAL);
+    if(!h)h=dlopen(fallback,RTLD_NOW|RTLD_LOCAL);
+    return h;
+}
+static int is_graphics_symbol(const char *name) {
+    return name && (strncmp(name,"gl",2)==0 ||
+                    strncmp(name,"egl",3)==0);
+}
+static void provider_init(void) {
+    memset(&g_provider,0,sizeof(g_provider));
+    g_provider.enabled=1;
+    g_provider.gles=open_graphics("libGLESv2.so.2","libGLESv2.so");
+    g_provider.egl=open_graphics("libEGL.so.1","libEGL.so");
+    void *p=g_provider.egl?dlsym(g_provider.egl,"eglGetProcAddress"):NULL;
+    if(p && sizeof(p)==sizeof(g_provider.getproc))
+        memcpy(&g_provider.getproc,&p,sizeof(p));
+    printf("[lenneth host] GLESv2_provider=%s EGL_provider=%s eglGetProcAddress=%s\n",
+           g_provider.gles?"loaded":"missing",
+           g_provider.egl?"loaded":"missing",
+           g_provider.getproc?"available":"unavailable");
+}
+static void provider_close(void) {
+    if(g_provider.egl)dlclose(g_provider.egl);
+    if(g_provider.gles)dlclose(g_provider.gles);
+    memset(&g_provider,0,sizeof(g_provider));
+}
+static int graphics_lookup(const char *name,uint64_t *value) {
+    if(!g_provider.enabled || !is_graphics_symbol(name))return 0;
+    void *p=NULL;
+    if(strncmp(name,"egl",3)==0) {
+        if(g_provider.egl)p=dlsym(g_provider.egl,name);
+    } else {
+        if(g_provider.gles)p=dlsym(g_provider.gles,name);
+    }
+    if(!p && g_provider.getproc)p=g_provider.getproc(name);
+    if(!p)return 0;
+    *value=(uint64_t)(uintptr_t)p;
+    return 1;
+}
+
 static const char *category(const char *s) {
     if(!s || !*s)return "unnamed";
     if((s[0]=='g' && s[1]=='l') ||
@@ -281,6 +339,8 @@ static int relocate_table(Module *m,Module *partner,
                 st->internal++;
             } else if(find_export(partner,name,&value)) {
                 st->partner++;
+            } else if(graphics_lookup(name,&value)) {
+                st->host_gles++;
             } else {
                 st->unresolved++;
                 continue;
@@ -310,6 +370,7 @@ static size_t unresolved_import_names(const Module *m,
         if(!name||!*name)continue;
         uint64_t addr;
         if(find_export(partner,name,&addr))continue;
+        if(graphics_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -322,10 +383,12 @@ static size_t unresolved_import_names(const Module *m,
                            m->label,tags[i],count[i]);
     return n;
 }
-int lenneth_link_preflight(const char *game_path,const char *cxx_path) {
+int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
+                              int with_host_graphics) {
     Module game={0},cxx={0};
     LinkStats gs={0},cs={0};
     int rc=3;
+    if(with_host_graphics)provider_init();
     if(!load_file(&cxx,"libc++_shared",cxx_path) ||
        !load_file(&game,"libMyGame",game_path)) {
         fprintf(stderr,"[lenneth link] load failed; stopping without calling anything\n");
@@ -341,24 +404,39 @@ int lenneth_link_preflight(const char *game_path,const char *cxx_path) {
     printf("[lenneth link] libMyGame: relocs=%" PRIu64
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_libcxx=%" PRIu64 " pending_host=%" PRIu64
-           " unsupported=%" PRIu64 "\n",
+           " host_gles_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
            gs.relocations,gs.relative,gs.internal,gs.partner,
-           gs.unresolved,gs.unsupported);
+           gs.unresolved,gs.host_gles,gs.unsupported);
     printf("[lenneth link] libc++_shared: relocs=%" PRIu64
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_game=%" PRIu64 " pending_host=%" PRIu64
-           " unsupported=%" PRIu64 "\n",
+           " host_gles_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
            cs.relocations,cs.relative,cs.internal,cs.partner,
-           cs.unresolved,cs.unsupported);
+           cs.unresolved,cs.host_gles,cs.unsupported);
     size_t missing_game=unresolved_import_names(&game,&cxx);
     size_t missing_cxx=unresolved_import_names(&cxx,&game);
     printf("[lenneth link] unique_pending game=%zu cxx=%zu\n",
            missing_game,missing_cxx);
-    printf("[lenneth link] PHASE3=PASS; link is PARTIAL; "
-           "Bionic/JNI/asset/audio symbols NOT ready; game NOT executed\n");
+    if(with_host_graphics)
+        printf("[lenneth host] PHASE4=PASS graphics_resolved_slots=%" PRIu64
+               " unresolved_host_sites=%" PRIu64
+               " unresolved_host_unique=%zu; Android ABI still pending; "
+               "commercial code NOT executed\n",
+               gs.host_gles+cs.host_gles,gs.unresolved+cs.unresolved,
+               missing_game+missing_cxx);
+    else
+        printf("[lenneth link] PHASE3=PASS; link is PARTIAL; "
+               "Bionic/JNI/asset/audio symbols NOT ready; game NOT executed\n");
     rc=0;
 cleanup:
     unload(&game);
     unload(&cxx);
+    if(with_host_graphics)provider_close();
     return rc;
+}
+int lenneth_link_preflight(const char *game_path,const char *cxx_path) {
+    return lenneth_link_preflight_mode(game_path,cxx_path,0);
+}
+int lenneth_host_plan(const char *game_path,const char *cxx_path) {
+    return lenneth_link_preflight_mode(game_path,cxx_path,1);
 }
