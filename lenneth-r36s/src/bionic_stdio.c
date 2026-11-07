@@ -394,7 +394,7 @@ int lenneth_bionic_stdio_selftest(void){
     lenneth_fd_provider_close();
     unlink(input);unlink(output);rmdir(assets);rmdir(saves);rmdir(base);
     printf("[lenneth stdio] SELFTEST=%s shimmed_api=%zu opened_streams=%zu "
-           "host_FILE_opaque=1 legacy___sF_NOT_MAPPED=1 "
+           "host_FILE_opaque=1 legacy___sF_DATA_AVAILABLE=1 "
            "commercial_execution=NO\n",ok?"PASS":"FAIL",
            sizeof(api)/sizeof(api[0]),opened_total);
     return ok?0:8;
