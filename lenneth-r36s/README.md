@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–12, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
+**Experimental bootstrap — phases 1–13, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -780,3 +780,69 @@ object/VM/class tables, locale/multibyte state, and OpenSL ES
 interfaces and CRIWARE audio/video lifecycle. Bionic CRT constructors
 and game executable mappings stay disabled. This remains a hardware
 and ABI **diagnostic**, not a runnable game port.
+
+## Phase 13: allowlisted dynamic linker, sandboxed saves and scalar wchar support
+
+The latest physical R36S Phase-12 diagnostic from dArkOSRE
+reported \`FINAL=PASS\` and \`R36S_EXECUTION=PASS\` for the *synthetic*
+cross-module ARM64 mock only. The private Android game engine remains
+non-executable. The real Android libraries had **299** externally
+bound guest relocation sites and **104 unresolved relocation sites**.
+The \`lenneth-blockers.tsv\` contains **103 module-specific import
+names** (42 game + 61 libc++), or **95 distinct names across both
+modules**. The largest group is Bionic libc/stdio/locale/linker (98
+import entries); OpenSL ES has five additional unresolved entries.
+
+### Combined phase-13 changes
+
+1. \`src/ndk_dloader.c\` is an independently written, deliberately
+   restricted \`dlopen\`/\`dlsym\`/\`dlclose\`/\`dlerror\` shim. Android
+   guest handles are **not** glibc handles. Only \`libGLESv2.so\` and
+   \`libEGL.so\` may be opened. Symbols are restricted to exported
+   \`gl[A-Z]*\` or \`egl[A-Z]*\` methods. Paths and unknown guest
+   libraries are rejected with explicit errors. Android linker
+   namespaces and \`dl_iterate_phdr\` are **not** implemented. No
+   arbitrary filesystem libraries may be opened by the guest.
+2. \`src/saveops_provider.c\` adds \`rename\`, \`mkdir\` and \`remove\`
+   as narrowly scoped, app-private operations on \`saves/\` only.
+   It uses \`openat\` relative to a saved directory FD and rejects
+   absolute paths, symlinks in path components, \`..\`, unrelated
+   paths and unsupported filesystem operations.
+3. \`src/unicode_provider.c\` now explicitly includes extra primitive
+   \`isw*\`/\`tow*\` scalar operations and wide-number parsing;
+   32-bit \`wchar_t\` matches Android ARM64. The calling convention
+   can match for these primitive signatures, but Unicode/locale
+   semantics can still vary, so full Android locale and multibyte
+   conversion state are NOT supported.
+4. CI checks these three groups together using independent synthetic
+   fixture code **and also reruns every previous phase 1–12 unit
+   test**. On R36S, one run also repeats the real synthetic RX ELF
+   test and the GLES/ALSA/joystick hardware tests.
+
+### R36S test
+
+Download \`Lenneth-Android-R36S-ARM64-Multitest-Phase13\` from
+[GitHub Actions](../../actions/workflows/lenneth-r36s.yml), extract
+the inner \`lenneth-r36s-multitest-phase13-arm64.zip\` into ROMs,
+and keep your *own* commercial \`libMyGame.so\` and
+\`libc++_shared.so\` in \`ports/lenneth-r36s/\`. The package contains
+only public port code and independent synthetic ARM64 mocks,
+not the game assets or original APK.
+
+Launch **Ports → Lenneth Android R36S Test** once, and upload
+\`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\`.
+
+Expected new markers: \`[lenneth ndk-dl] SELFTEST=PASS\`,
+\`[lenneth saveops] SELFTEST=PASS\`,
+\`[lenneth ndk-dl] PHASE13_LINK=PASS\`,
+plus the existing \`[lenneth synthetic] R36S_EXECUTION=PASS\`
+and \`[lenneth suite] FINAL=PASS\`.
+
+**Critical remaining work**: Bionic \`FILE*\`/\`__sF\` object
+representation and stdio, \`setjmp/longjmp\` ABI, locale and
+\`mbstate_t\` conversions, Android linker ELF module namespaces
+and \`dl_iterate_phdr\`, OpenSL ES interfaces, and a working JNI/VM
+environment. None of these are safely replaceable with glibc
+by matching their symbol names. Original commercial game code is
+still NOT executed. This remains an ABI and R36S hardware diagnostic,
+not a playable game port.
