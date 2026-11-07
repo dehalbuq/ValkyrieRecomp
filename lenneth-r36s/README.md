@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1, 2 and 3. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–4. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -197,3 +197,57 @@ with the Cocos2d-x interface only as those dependencies are validated.
 The full loader must initialize constructors only after all
 required relocations, memory-protection and ABI checks pass.
 No performance or playable-game claim can be made at this stage.
+
+## Phase 4: resolve Linux-native GLESv2/EGL entry points, safely
+
+From the real phase-3 R36S test:
+
+- `libMyGame.so`: 43,385 relocation sites checked, 12,357 RELATIVE,
+  29,841 internal, **917** bound to the Android libc++ library,
+  270 relocations referring to unavailable host APIs.
+- `libc++_shared.so`: 3,508 relocation sites checked, with 133
+  unavailable host relocation sites.
+- 268 distinct imported names in the game and 131 in libc++ remain
+  unimplemented. The game-side categories include **97 GLES2/EGL**.
+- These data are from the *actual dArkOSRE R36S runtime log*.
+  "Cross-library relocations" counts relocation sites, not unique names.
+
+The new `lenneth-probe --host-plan libMyGame.so libc++_shared.so`:
+
+1. Maps and links both *privately supplied* original ARM64 ELF files
+   in non-executable, read/write-only memory, as in phase 3.
+2. Loads **host** `libGLESv2.so[.2]` and `libEGL.so[.1]` from Linux.
+   For imports named `gl*` and `egl*`, queries exports with
+   `dlsym`; for GLES OES extensions also tries
+   `eglGetProcAddress`.
+3. Writes obtained native GLES/EGL addresses to guest import
+   relocation *data slots only*. Logs `host_gles_slots` and
+   `graphics_resolved_slots` separately from unresolved Android APIs.
+   This does **not** call OpenGL functions from the game or guarantee
+   compatibility with an eventual live GLES context.
+4. **Never** resolves `pthread_*`, libc, Bionic TLS, C++ ABI or Android
+   NDK symbols directly to Linux glibc merely because names match.
+   Bionic's object layouts / calling conventions may differ.
+5. Does not run ELF initializers or `JNI_OnLoad`, and never maps game
+   code executable. This remains a **non-playable preflight**.
+
+### Test
+
+Download `Lenneth-Android-R36S-ARM64-Phase4` from the
+[phase-4 workflow](../../actions/workflows/lenneth-r36s.yml) and extract
+its inner `lenneth-r36s-phase4-arm64.zip` to your existing ROM
+partition's `ports/` directory. Preserve your own private
+`libMyGame.so` and `libc++_shared.so` in
+`ports/lenneth-r36s/`; **nothing from the commercial APK is bundled
+or uploaded**. Launch **Lenneth Android R36S Test**, then send
+`ports/lenneth-r36s/lenneth-r36s.log`.
+
+Look for both `[lenneth link] PHASE3=PASS` and
+`[lenneth host] PHASE4=PASS`. The second line contains native GL
+resolution counts. A low or zero count indicates a missing graphics
+provider or unsupported host extension: do not guess about real
+game performance.
+
+Next: Bionic compatible libc/threads/TLS, AAssetManager, minimal
+Cocos2d JNI, OpenSL ES, ELF memory protection and safe game launch.
+Respect licenses and original commercial data ownership.
