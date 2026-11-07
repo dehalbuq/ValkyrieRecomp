@@ -5,10 +5,57 @@
  * VALKYRIE_START_BUTTON / VALKYRIE_SELECT_BUTTON (zero-based raw indices).
  */
 #include "r36s_exit_menu.h"
+#include <chrono>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static const auto s_boot_clock_start = std::chrono::steady_clock::now();
+static int s_boot_first_frame = 0;
+static int s_boot_first_nonblack = 0;
+static int s_boot_timeline_armed = 0;
+
+void r36s_boot_profile_mark(const char *stage) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now - s_boot_clock_start).count();
+    fprintf(stdout, "[R36S boot] stage=%s elapsed_ms=%lld\\n",
+            stage ? stage : "(null)", (long long)elapsed);
+    fflush(stdout);
+}
+
+void r36s_boot_present_probe(const uint32_t *pixels, int width, int height) {
+    if (!s_boot_first_frame) {
+        s_boot_first_frame = 1;
+        r36s_boot_profile_mark("first-frame-buffer");
+    }
+    if (s_boot_first_nonblack || !pixels || width < 1 || height < 1 ||
+        width > 4096 || height > 4096) return;
+    const size_t count = (size_t)width * (size_t)height;
+    /* Sample ~1K positions, then a full scan only if the samples are black.
+     * This code runs until the first visible pixel and never touches VRAM. */
+    for (size_t i = 0; i < count; i += (count / 1024u) + 1u) {
+        if ((pixels[i] & 0x00FFFFFFu) != 0u) {
+            s_boot_first_nonblack = 1;
+            r36s_boot_profile_mark("first-nonblack-frame");
+            return;
+        }
+    }
+    /* Tiny image details could miss the sparse probe: sample every pixel
+     * only after 500ms and just once a second in the all-black phase. */
+    static Uint32 last_full_scan = 0;
+    const Uint32 now = SDL_GetTicks();
+    if (now - last_full_scan < 1000) return;
+    last_full_scan = now;
+    for (size_t i = 0; i < count; ++i) {
+        if ((pixels[i] & 0x00FFFFFFu) != 0u) {
+            s_boot_first_nonblack = 1;
+            r36s_boot_profile_mark("first-nonblack-frame");
+            return;
+        }
+    }
+}
 
 static SDL_Joystick *s_joy = NULL;
 static SDL_GameController *s_pad = NULL;
@@ -259,7 +306,25 @@ static void text(SDL_Renderer *r, const char *msg, int x, int y, int scale) {
     }
 }
 void r36s_exit_menu_draw(SDL_Renderer *r, int logical_w, int logical_h) {
-    if (!s_menu || !r || logical_w < 1 || logical_h < 1) return;
+    if (!r || logical_w < 1 || logical_h < 1) return;
+    if (!s_menu && !s_boot_first_nonblack) {
+        /* Keep the player informed while BIOS/kernel/game run on the CPU.
+         * This overlay does not speed emulation up and disappears automatically
+         * once an actual non-black framebuffer is emitted. */
+        const int scale = logical_w >= 480 ? 3 : 2;
+        const int title_w = 14 * 6 * scale;
+        const int box_w = title_w + 10 * scale;
+        SDL_Rect b = {(logical_w-box_w)/2, (logical_h - 22*scale)/2,
+                      box_w, 22*scale};
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, 0, 0, 0, 208);
+        SDL_RenderFillRect(r, &b);
+        SDL_SetRenderDrawColor(r, 220, 220, 220, 255);
+        SDL_RenderDrawRect(r, &b);
+        text(r, "INICIANDO JOGO", b.x + 5*scale, b.y + 7*scale, scale);
+        return;
+    }
+    if (!s_menu) return;
     int scale = logical_w >= 500 ? 3 : 2;
     const int bw = 86*scale, bh = 51*scale;
     SDL_Rect box = {(logical_w-bw)/2, (logical_h-bh)/2, bw, bh};
