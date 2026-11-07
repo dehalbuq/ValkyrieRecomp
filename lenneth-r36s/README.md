@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–4. This does NOT run the game yet.**
+**Experimental bootstrap — phases 1–5. This does NOT run the game yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -251,3 +251,52 @@ game performance.
 Next: Bionic compatible libc/threads/TLS, AAssetManager, minimal
 Cocos2d JNI, OpenSL ES, ELF memory protection and safe game launch.
 Respect licenses and original commercial data ownership.
+
+## Phase 5: conservative libc/libm symbol provider
+
+Physical R36S phase-4 result: **all 97 OpenGL ES/EGL guest import
+sites** in `libMyGame.so` were populated from native host
+`libGLESv2` and `libEGL`. The engine still had 171 distinct
+unresolved symbols, and Android `libc++_shared.so` had 131. Native
+GLES2, ALSA, gamepad and the Start+Select exit menu remained functional.
+
+The phase-5 `--portable-plan libMyGame.so libc++_shared.so` mode adds
+an explicit small, audited set of C functions from native Linux
+`libc.so.6` and `libm.so.6`. The initial allowlist is restricted to
+numeric math, portable string and memory operations, safe allocator
+functions and basic string-to-number conversions. It **does not**
+automatically resolve C functions merely because Android and glibc
+export the same symbol name.
+
+**Never** bridge these without separate ABI-aware wrappers:
+`pthread_*` mutex/cond object layouts, `FILE*`/`__sF`,
+`setjmp`/`longjmp`, Bionic `__errno`/TLS, locale objects,
+Bionic fortify wrappers, `stat`, Java/JNI, OpenSL ES and AAssetManager.
+The pending symbols remain visible by category in the phase-5 log.
+
+Each audited symbol address is placed into a relocation data slot
+in a read-write **non-executable** Android ELF mapping. This validates
+linking, **not actual calls**, and doesn't prove runtime safety
+in the full game. Game initialization remains disabled.
+
+### Test on R36S
+
+Download the latest GitHub Actions artifact
+`Lenneth-Android-R36S-ARM64-Phase5` from this branch.
+Extract the nested `lenneth-r36s-phase5-arm64.zip` into the ROM
+partition and keep your own `libMyGame.so` and
+`libc++_shared.so` private in `ports/lenneth-r36s/`.
+The game APK, commercial libraries and CPK data are never included
+in GitHub build artifacts. Run the existing Ports test and send
+`ports/lenneth-r36s/lenneth-r36s.log` only.
+
+Expected additional log lines:
+```
+[lenneth portable] libc_provider=loaded libm_provider=loaded ...
+[lenneth portable] PHASE5=PASS graphics_slots=... libc_libm_slots=... ...
+```
+
+Next: typed wrappers for Android Bionic threads and TLS, JNI and
+asset APIs. Enabling execution of any commercial code will require
+full relocation/provider coverage, appropriate memory protections
+and explicit runtime controls after the ABI compatibility is assessed.
