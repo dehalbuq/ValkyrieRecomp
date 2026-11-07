@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase9 multi-ABI suite
+name: Lenneth Android R36S - ARM64 phase10 multi-ABI suite
 
 on:
   workflow_dispatch:
@@ -260,6 +260,49 @@ jobs:
             exit 1
           fi
 
+      - name: Phase10 Bionic fortified libc and thread batch tests
+        run: |
+          ./build-lenneth/lenneth-probe --fortify-selftest | tee lenneth-fortify-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-fortify-fixture.txt
+          cat > /tmp/lenneth_fortify_mock.c <<'EOF'
+          #include <stddef.h>
+          #include <sys/types.h>
+          #include <stdarg.h>
+          extern size_t __strlen_chk(const char*, size_t);
+          extern void *__memcpy_chk(void*,const void*,size_t,size_t);
+          extern ssize_t __read_chk(int,void*,size_t,size_t);
+          extern int *__errno(void);
+          extern int __open_2(const char*,int);
+          extern int __vsnprintf_chk(char*,size_t,int,size_t,const char*,va_list);
+          static int guest_errno_checked = 0;
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm, void *reserved) {
+            (void)vm; (void)reserved;
+            char d[32]={0};
+            const char *s="test";
+            __memcpy_chk(d,s,5,sizeof(d));
+            guest_errno_checked=*__errno();
+            if(guest_errno_checked==1234)
+              return (int)__read_chk(0,d,4,sizeof(d));
+            if(guest_errno_checked==9876)
+              return __open_2("/dev/null",0);
+            return (int)__strlen_chk(d,sizeof(d));
+          }
+          EOF
+          cc -shared -fPIC -O2 -fno-builtin -o /tmp/phase10_game.so /tmp/lenneth_fortify_mock.c
+          mkdir -p assets
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase10_game.so /tmp/phase3_partner.so | tee lenneth-phase10-batch-test.txt
+          grep -q 'PHASE10_LINK=PASS' lenneth-phase10-batch-test.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase10-batch-test.txt
+          grep -Eq 'host_fortify_slots=[1-9][0-9]*' lenneth-phase10-batch-test.txt
+          grep -q 'BATCH_LINK=PASS single_mapping_pass=1' lenneth-phase10-batch-test.txt
+          grep -q 'FINAL=PASS' lenneth-phase10-batch-test.txt
+          grep -q 'Bionic FORTIFY/errno synthetic fixtures: PASS' lenneth-suite-summary.txt
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid ELF passed fortify batch"
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -272,13 +315,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase9-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase9-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase9-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase10-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase10-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase10-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase9
-          path: lenneth-r36s-multitest-phase9-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase10
+          path: lenneth-r36s-multitest-phase10-arm64.zip
           if-no-files-found: error
           retention-days: 14
