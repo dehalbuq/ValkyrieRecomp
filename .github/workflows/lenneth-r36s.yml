@@ -84,6 +84,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Lenneth-Android-R36S-ARM64-Phase2
-          path: lenneth-r36s-phase1-arm64.zip
+          path: lenneth-r36s-phase2-arm64.zip
           if-no-files-found: error
           retention-days: 14
