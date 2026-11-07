@@ -14,7 +14,7 @@ pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
 find_library(GLESV2_LIB NAMES GLESv2 REQUIRED)
 find_package(Threads REQUIRED)
 
-add_executable(lenneth-probe src/host.c src/elf_audit.c src/elf_map_preflight.c src/elf_link_preflight.c src/portable_provider.c src/asset_provider.c src/android_log_provider.c src/bionic_threads.c src/bionic_fortify.c src/cxx_runtime.c src/posix_fd_provider.c src/unicode_provider.c src/bionic_data_provider.c)
+add_executable(lenneth-probe src/host.c src/elf_audit.c src/elf_map_preflight.c src/elf_link_preflight.c src/portable_provider.c src/asset_provider.c src/android_log_provider.c src/bionic_threads.c src/bionic_fortify.c src/cxx_runtime.c src/posix_fd_provider.c src/unicode_provider.c src/bionic_data_provider.c src/ndk_dloader.c src/saveops_provider.c)
 target_link_libraries(lenneth-probe PRIVATE PkgConfig::SDL2 "${GLESV2_LIB}" "${CMAKE_DL_LIBS}" Threads::Threads)
 target_compile_options(lenneth-probe PRIVATE
     -Wall -Wextra -Wpedantic -O2 -fno-strict-aliasing)
