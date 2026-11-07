@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–14, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
+**Experimental bootstrap — phases 1–15, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -921,3 +921,84 @@ Expect \`[lenneth stdio] SELFTEST=PASS\` and
 contain the legacy Bionic \`__sF\` object and five OpenSL ES imports;
 do not interpret missing \`FILE\` function names as a runnable
 Android application.
+
+## Phase 15: five OpenSL ES imports, typed object/interface ABI
+
+The physical Phase-14 R36S ZIP supplied by the owner confirms:
+- **Overall diagnostic PASS**. Mock AArch64 execution across two ELF
+  libraries still returns 77 on dArkOSRE. Only independent synthetic
+  libraries, **never commercial game code**, were made executable.
+- **352** guest relocations bound to native Linux or compatibility
+  providers: 97 graphics, 108 libc/libm, 11 assets, four Android
+  logging, 44 pthread, 18 FORTIFY, six C++ lifecycle, nine POSIX fd,
+  27 Unicode, one stack guard, four restricted libdl, three saveops
+  and 20 opaque stdio API references.
+- **51 unresolved relocation sites**, **50 module-specific import
+  entries** (19 in the game, 31 in Android libc++) representing
+  **48 unique names**. Five are the OpenSL ES symbol references
+  \`slCreateEngine\`, \`SL_IID_ENGINE\`, \`SL_IID_PLAY\`,
+  \`SL_IID_BUFFERQUEUE\` and \`SL_IID_VOLUME\`.
+
+### What phase 15 adds
+
+\`src/opensl_bridge.c\` / \`.h\` independently implement **the first
+OpenSL ES 1.0.1 ABI surface**:
+- Correctly distinguish the **four SL_IID_* pointer DATA objects**
+  (addresses of global pointer variables) from \`slCreateEngine\`,
+  which is a function. The non-executing ARM64 ELF relocator checks
+  the guest ELF symbol type before providing any of these five
+  addresses.
+- Create/realize/destroy OpenSL engine, output mix and limited PCM
+  audio player objects; retrieve the Engine/Play/BufferQueue/Volume
+  interfaces by interface ID, using a vtable layout aligned to the
+  standard OpenSL ES 1.0.1 C API.
+- Support limited logical play states, volume/mute, bounded PCM
+  buffer queue operations, and callback registration. Independent
+  synthetic test code consumes one queued buffer and invokes the
+  callback to check ordering and interfaces.
+
+**This implementation does NOT yet play sound.** There is no SDL/ALSA
+PCM output wired to this bridge in Phase 15. Outside of the synthetic
+test, enqueued PCM data will not be consumed by a hardware backend,
+so callback-driven game playback is not functional. This phase tests
+symbol/data ABI, interface dispatch and queue semantics only and
+must not be described as a working OpenSL ES audio engine.
+Unsupported formats/interfaces return errors or are not exposed.
+
+**Source/reference:** [Android NDK OpenSL ES documentation](https://developer.android.com/ndk/guides/audio/opensl/opensl-for-android)
+and the publicly available Khronos
+[OpenSL ES 1.0.1 header](https://android.googlesource.com/platform/prebuilt/+/968372cd8fffab51ff89c6b3cb40bc74ede24cb9/ndk/android-ndk-r8/platforms/android-9/arch-mips/usr/include/SLES/OpenSLES.h).
+The bridge itself was independently written for this port.
+
+### Phase-15 R36S single-run diagnostic
+
+Download workflow artifact
+\`Lenneth-Android-R36S-ARM64-Multitest-Phase15\`.
+Extract inner \`lenneth-r36s-multitest-phase15-arm64.zip\`
+to the ROM partition, preserving \`ports/\`. Keep the two
+privately supplied \`libMyGame.so\` and \`libc++_shared.so\` in
+\`ports/lenneth-r36s/\`. The test requires no commercial CPK assets
+and does not include any original game files.
+
+Launch Ports → Lenneth Android R36S Test **once**. Upload only
+\`ports/lenneth-r36s/lenneth-r36s-diagnostics.zip\`.
+
+Expected markers:
+\`\`\`
+[lenneth opensl] SELFTEST=PASS ... real_pcm_output=NOT_IMPLEMENTED
+[lenneth opensl] PHASE15_LINK=PASS ...
+[lenneth synthetic] R36S_EXECUTION=PASS
+[lenneth suite] FINAL=PASS
+\`\`\`
+
+### Critical unsolved runtime tasks
+
+The OpenSL engine still needs **actual PCM output** and callback
+scheduling against SDL/ALSA, correct audio-device lifecycle and
+recovery after sleep/resume. These guest interfaces also remain
+unvalidated: Bionic \`__sF\` and direct \`FILE*\` layout, locale_t and
+mbstate_t, \`stat/fstat\`, \`setjmp/longjmp\`, POSIX directory
+object layout, Android ELF dynamic linker introspection, and full
+Java/JNI initialization. Reducing an unresolved-symbol list does
+not mean that commercial code is safe to run. Original game code
+remains **non-executable** in the production diagnostic loader.
