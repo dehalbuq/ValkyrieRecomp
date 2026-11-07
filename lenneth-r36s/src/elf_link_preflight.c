@@ -20,9 +20,11 @@
 #include <sys/mman.h>
 #include "portable_provider.h"
 #include "asset_provider.h"
+#include "android_log_provider.h"
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
 static int g_asset_binding_enabled=0;
+static int g_android_log_binding_enabled=0;
 typedef struct {
     const char *label;
     uint8_t *raw, *image;
@@ -36,7 +38,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -355,6 +357,11 @@ static int relocate_table(Module *m,Module *partner,
                        ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
                       lenneth_asset_lookup(name,&value)) {
                 st->host_assets++;
+            } else if(g_android_log_binding_enabled &&
+                      (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+                       ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+                      lenneth_android_log_lookup(name,&value)) {
+                st->host_logging++;
             } else {
                 st->unresolved++;
                 continue;
@@ -391,6 +398,10 @@ static size_t unresolved_import_names(const Module *m,
            (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
             ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
            lenneth_asset_lookup(name,&addr))continue;
+        if(g_android_log_binding_enabled &&
+           (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+            ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+           lenneth_android_log_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -409,6 +420,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     LinkStats gs={0},cs={0};
     int rc=3;
     g_asset_binding_enabled=(provider_mode>=3);
+    g_android_log_binding_enabled=(provider_mode>=4);
     if(provider_mode>=1)provider_init();
     if(provider_mode>=2)lenneth_portable_open();
     if(provider_mode>=3){
@@ -431,21 +443,50 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_libcxx=%" PRIu64 " pending_host=%" PRIu64
            " host_gles_slots=%" PRIu64 " host_portable_slots=%" PRIu64
-           " host_asset_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
+           " host_asset_slots=%" PRIu64 " host_log_slots=%" PRIu64
+           " unsupported=%" PRIu64 "\n",
            gs.relocations,gs.relative,gs.internal,gs.partner,
-           gs.unresolved,gs.host_gles,gs.host_portable,gs.host_assets,gs.unsupported);
+           gs.unresolved,gs.host_gles,gs.host_portable,gs.host_assets,gs.host_logging,gs.unsupported);
     printf("[lenneth link] libc++_shared: relocs=%" PRIu64
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_game=%" PRIu64 " pending_host=%" PRIu64
            " host_gles_slots=%" PRIu64 " host_portable_slots=%" PRIu64
            " host_asset_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
            cs.relocations,cs.relative,cs.internal,cs.partner,
-           cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.unsupported);
+           cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.host_logging,cs.unsupported);
     size_t missing_game=unresolved_import_names(&game,&cxx);
     size_t missing_cxx=unresolved_import_names(&cxx,&game);
     printf("[lenneth link] unique_pending game=%zu cxx=%zu\n",
            missing_game,missing_cxx);
-    if(provider_mode==3)
+    if(provider_mode==4) {
+        const char *jni_bridges[]={
+            "JNI_OnLoad",
+            "cocos_android_app_init",
+            "Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit",
+            "Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeRender",
+            "Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeTouchesBegin"
+        };
+        unsigned found=0;
+        for(size_t i=0;i<sizeof(jni_bridges)/sizeof(jni_bridges[0]);i++){
+            uint64_t addr=0;
+            int present=find_export(&game,jni_bridges[i],&addr);
+            if(present)found++;
+            printf("[lenneth JNI] bridge=%s present=%d invoked=0\n",
+                   jni_bridges[i],present);
+        }
+        printf("[lenneth JNI] exported_entrypoints=%u/%zu calls=0\n",
+               found,sizeof(jni_bridges)/sizeof(jni_bridges[0]));
+        printf("[lenneth android-log] PHASE7=PASS graphics_slots=%" PRIu64
+               " portable_slots=%" PRIu64 " asset_slots=%" PRIu64
+               " log_slots=%" PRIu64 " host_pending_sites=%" PRIu64
+               " distinct_pending=%zu; Bionic pthread/JNI/audio NOT READY; "
+               "engine NOT executed\n",
+               gs.host_gles+cs.host_gles,
+               gs.host_portable+cs.host_portable,
+               gs.host_assets+cs.host_assets,
+               gs.host_logging+cs.host_logging,
+               gs.unresolved+cs.unresolved,missing_game+missing_cxx);
+    } else if(provider_mode==3)
         printf("[lenneth asset] PHASE6=PASS graphics_slots=%" PRIu64
                " portable_slots=%" PRIu64
                " asset_slots=%" PRIu64
@@ -478,6 +519,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     rc=0;
 cleanup:
     g_asset_binding_enabled=0;
+    g_android_log_binding_enabled=0;
     unload(&game);
     unload(&cxx);
     if(provider_mode>=3)lenneth_asset_close_root();
@@ -496,4 +538,7 @@ int lenneth_portable_plan(const char *game_path,const char *cxx_path) {
 }
 int lenneth_asset_plan(const char *game_path,const char *cxx_path) {
     return lenneth_link_preflight_mode(game_path,cxx_path,3);
+}
+int lenneth_logging_plan(const char *game_path,const char *cxx_path) {
+    return lenneth_link_preflight_mode(game_path,cxx_path,4);
 }
