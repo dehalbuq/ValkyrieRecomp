@@ -673,6 +673,127 @@ cleanup:
     if(provider_mode>=1)provider_close();
     return rc;
 }
+
+/*
+ * Phase11 first EXECUTABLE AArch64 native-library test.
+ *
+ * This function is deliberately separate from --batch:
+ *  - it only allows two original synthetic ELF files with a matching
+ *    synthetic marker exported by BOTH modules,
+ *  - no DT_NEEDED and no init arrays / constructors,
+ *  - all imports must resolve, no RWX program segments,
+ *  - it never calls commercial library code.
+ *
+ * It creates RX mappings for synthetic guest code ONLY after relocations
+ * are fully resolved, and calls a known synthetic JNI_OnLoad returning 77.
+ */
+static int synthetic_marker_ok(const Module *m) {
+    static const char token[]="LENNETH_PHASE11_SYNTHETIC_ONLY_2026";
+    uint64_t p=0;
+    if(!find_export(m,"lenneth_phase11_mock_marker",&p))
+        return 0;
+    if(p<(uint64_t)(uintptr_t)m->image || (uint64_t)(uintptr_t)m->image>
+       UINT64_MAX-m->span || p>(uint64_t)(uintptr_t)m->image+m->span ||
+       sizeof(token)>((uint64_t)(uintptr_t)m->image+m->span-p))
+        return 0;
+    return memcmp((const void*)(uintptr_t)p,token,sizeof(token))==0;
+}
+static int synthetic_no_external_or_init(const Module *m) {
+    const Elf64_Ehdr *eh=(const Elf64_Ehdr*)(const void*)m->raw;
+    const Elf64_Phdr *ph=(const Elf64_Phdr*)(const void*)(m->raw+eh->e_phoff);
+    for(unsigned i=0;i<eh->e_phnum;i++) {
+        if(ph[i].p_type==PT_LOAD && (ph[i].p_flags&PF_W) &&
+           (ph[i].p_flags&PF_X))
+            return 0;
+        if(ph[i].p_type!=PT_DYNAMIC)continue;
+        if(ph[i].p_vaddr<m->lo || ph[i].p_vaddr-m->lo>m->span ||
+           ph[i].p_filesz>m->span-(ph[i].p_vaddr-m->lo))
+            return 0;
+        const Elf64_Dyn *d=(const Elf64_Dyn*)(const void*)
+                         (m->image+(size_t)(ph[i].p_vaddr-m->lo));
+        size_t count=(size_t)ph[i].p_filesz/sizeof(Elf64_Dyn);
+        for(size_t j=0;j<count;j++){
+            if(d[j].d_tag==DT_NULL)break;
+            if(d[j].d_tag==DT_NEEDED ||
+               (d[j].d_tag==DT_INIT && d[j].d_un.d_ptr) ||
+               (d[j].d_tag==DT_INIT_ARRAYSZ && d[j].d_un.d_val) ||
+               (d[j].d_tag==DT_PREINIT_ARRAYSZ && d[j].d_un.d_val))
+                return 0;
+        }
+    }
+    return 1;
+}
+static int synthetic_protect(Module *m){
+    const Elf64_Ehdr *eh=(const Elf64_Ehdr*)(const void*)m->raw;
+    const Elf64_Phdr *ph=(const Elf64_Phdr*)(const void*)(m->raw+eh->e_phoff);
+    for(unsigned i=0;i<eh->e_phnum;i++) {
+        if(ph[i].p_type!=PT_LOAD || !ph[i].p_memsz)continue;
+        uint64_t low=ph[i].p_vaddr&~UINT64_C(4095);
+        if(ph[i].p_vaddr>UINT64_MAX-ph[i].p_memsz-4095)return 0;
+        uint64_t high=(ph[i].p_vaddr+ph[i].p_memsz+4095)&~UINT64_C(4095);
+        if(high<=low || low<m->lo || high-m->lo>m->span)return 0;
+        int perm=0;
+        if(ph[i].p_flags&PF_R)perm|=PROT_READ;
+        if(ph[i].p_flags&PF_W)perm|=PROT_WRITE;
+        if(ph[i].p_flags&PF_X)perm|=PROT_EXEC;
+        if((perm&PROT_WRITE)&&(perm&PROT_EXEC))return 0;
+        if(mprotect(m->image+(size_t)(low-m->lo),
+                    (size_t)(high-low),perm)!=0) {
+            perror("[lenneth synthetic] mprotect");return 0;
+        }
+    }
+    return 1;
+}
+int lenneth_synthetic_execute(const char *game_path,const char *partner_path) {
+    Module game={0},partner={0};
+    LinkStats a={0},b={0};
+    int rc=8;
+    printf("[lenneth synthetic] execution is permitted ONLY for "
+           "independently authored synthetic test libraries\n");
+    if(!load_file(&partner,"mock_partner",partner_path) ||
+       !load_file(&game,"mock_game",game_path))goto end;
+    if(!synthetic_marker_ok(&game) ||
+       !synthetic_marker_ok(&partner) ||
+       !synthetic_no_external_or_init(&game) ||
+       !synthetic_no_external_or_init(&partner)){
+        printf("[lenneth synthetic] REFUSED: absent matching synthetic markers, "
+               "external dependencies, constructors or RWX segment\n");
+        goto end;
+    }
+    if(!relocate_table(&partner,&game,partner.rela,partner.rela_count,&b) ||
+       !relocate_table(&partner,&game,partner.jmp,partner.jmp_count,&b) ||
+       !relocate_table(&game,&partner,game.rela,game.rela_count,&a) ||
+       !relocate_table(&game,&partner,game.jmp,game.jmp_count,&a) ||
+       a.unresolved || b.unresolved || a.unsupported || b.unsupported) {
+        printf("[lenneth synthetic] REFUSED: incomplete or invalid relocations\n");
+        goto end;
+    }
+    uint64_t addr=0;
+    if(!find_export(&game,"JNI_OnLoad",&addr) ||
+       addr<(uint64_t)(uintptr_t)game.image ||
+       addr>=(uint64_t)(uintptr_t)game.image+game.span)
+        goto end;
+    if(!synthetic_protect(&game) || !synthetic_protect(&partner)){
+        printf("[lenneth synthetic] executable mapping protection failed\n");
+        goto end;
+    }
+    int (*fn)(void*,void*)=NULL;
+    void *address=(void*)(uintptr_t)addr;
+    if(sizeof(fn)!=sizeof(address))goto end;
+    memcpy(&fn,&address,sizeof(fn));
+    int val=fn(NULL,NULL); /* KNOWN MOCK ONLY, NEVER COMMERCIAL ENGINE */
+    printf("[lenneth synthetic] returned=%d expected=77\n",val);
+    if(val==77){
+        printf("[lenneth synthetic] EXECUTION=PASS AArch64 ELF "
+               "cross_module_calls=1 W_X_policy=enforced guest=commercial_NO\n");
+        rc=0;
+    }
+end:
+    unload(&game);
+    unload(&partner);
+    return rc;
+}
+
 int lenneth_link_preflight(const char *game_path,const char *cxx_path) {
     return lenneth_link_preflight_mode(game_path,cxx_path,0);
 }
