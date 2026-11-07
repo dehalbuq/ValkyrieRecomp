@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase3 relocation linker preflight
+name: Lenneth Android R36S - ARM64 phase4 GLES host provider preflight
 
 on:
   workflow_dispatch:
@@ -74,11 +74,13 @@ jobs:
           cat > /tmp/lenneth_game.c <<'EOF'
           extern int v1_shared_api(void);
           extern int v1_shared_global;
+          extern void glClear(unsigned int);
           static int private_value = 7;
           int *internal_ref = &private_value;
           int *imported_data = &v1_shared_global;
           __attribute__((visibility("default"))) int JNI_OnLoad(void *vm, void *r) {
             (void)vm; (void)r;
+            glClear(0x4000u); /* unresolved GLES import only; never executed */
             return v1_shared_api() + *imported_data + *internal_ref;
           }
           EOF
@@ -89,6 +91,17 @@ jobs:
           grep -Eq 'cross_libcxx=[1-9][0-9]*' lenneth-linkplan-test.txt
           if ./build-lenneth/lenneth-probe --link-plan /etc/os-release /tmp/phase3_partner.so; then
             echo "ERROR: invalid game ELF passed linking preflight"
+            exit 1
+          fi
+
+      - name: Test phase4 host GLES2/EGL symbol bindings without running game
+        run: |
+          ./build-lenneth/lenneth-probe --host-plan /tmp/phase3_game.so /tmp/phase3_partner.so | tee lenneth-hostplan-test.txt
+          grep -q 'PHASE4=PASS' lenneth-hostplan-test.txt
+          grep -Eq 'host_gles_slots=[1-9][0-9]*' lenneth-hostplan-test.txt
+          grep -q 'GLESv2_provider=loaded' lenneth-hostplan-test.txt
+          if ./build-lenneth/lenneth-probe --host-plan /etc/os-release /tmp/phase3_partner.so; then
+            echo "ERROR: invalid game ELF was accepted by host plan"
             exit 1
           fi
 
@@ -104,13 +117,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-phase3-arm64.zip ports)
-          sha256sum lenneth-r36s-phase3-arm64.zip
-          ls -lh lenneth-r36s-phase3-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-phase4-arm64.zip ports)
+          sha256sum lenneth-r36s-phase4-arm64.zip
+          ls -lh lenneth-r36s-phase4-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Phase3
-          path: lenneth-r36s-phase3-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Phase4
+          path: lenneth-r36s-phase4-arm64.zip
           if-no-files-found: error
           retention-days: 14
