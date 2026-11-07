@@ -1,0 +1,71 @@
+name: Lenneth Android R36S - ARM64 native bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - port/lenneth-android-r36s
+    paths:
+      - "lenneth-r36s/**"
+      - ".github/workflows/lenneth-r36s.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native ARM64 SDL2 and GLESv2 headers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config libsdl2-dev libgles2-mesa-dev libegl-dev zip file binutils
+
+      - name: Validate shell scripts
+        run: |
+          bash -n lenneth-r36s/PortMaster/lenneth-test-launcher.sh
+          sh -n "lenneth-r36s/PortMaster/Lenneth Android R36S Test.sh"
+
+      - name: Compile independent Linux ARM64 hardware test
+        run: |
+          cmake -S lenneth-r36s -B build-lenneth -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-lenneth -v -j 4
+          file build-lenneth/lenneth-probe
+          readelf -h build-lenneth/lenneth-probe | grep -q 'Machine:.*AArch64'
+
+      - name: Verify read-only ELF audit using an ARM64 system executable
+        run: |
+          ./build-lenneth/lenneth-probe --inspect /usr/bin/true | tee lenneth-audit-test.txt
+          grep -q 'machine=AArch64' lenneth-audit-test.txt
+          grep -q 'NEEDED total=' lenneth-audit-test.txt
+          if ./build-lenneth/lenneth-probe --inspect /etc/os-release; then
+            echo "ERROR: invalid ELF was accepted"
+            exit 1
+          fi
+
+      - name: Package only open-source launcher and bootstrap
+        run: |
+          set -eu
+          mkdir -p package/ports/lenneth-r36s
+          install -m755 build-lenneth/lenneth-probe package/ports/lenneth-r36s/lenneth-probe
+          install -m755 lenneth-r36s/PortMaster/lenneth-test-launcher.sh package/ports/lenneth-r36s/launch.sh
+          install -m755 "lenneth-r36s/PortMaster/Lenneth Android R36S Test.sh" "package/ports/Lenneth Android R36S Test.sh"
+          install -m644 lenneth-r36s/README.md package/ports/lenneth-r36s/README.md
+          install -m644 lenneth-r36s/LICENSE package/ports/lenneth-r36s/LICENSE
+          test ! -e package/ports/lenneth-r36s/libMyGame.so
+          test ! -e package/ports/lenneth-r36s/libRMS.so
+          test ! -e package/ports/lenneth-r36s/assets
+          (cd package && zip -qr ../lenneth-r36s-phase1-arm64.zip ports)
+          sha256sum lenneth-r36s-phase1-arm64.zip
+          ls -lh lenneth-r36s-phase1-arm64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lenneth-Android-R36S-ARM64-Phase1
+          path: lenneth-r36s-phase1-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
