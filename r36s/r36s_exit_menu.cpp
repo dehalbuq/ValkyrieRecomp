@@ -72,6 +72,14 @@ static int s_raw_start = -1;
 static int s_raw_select = -1;
 static Uint32 s_profile_start_ms = 0;
 static unsigned s_profile_frames = 0;
+static uint64_t s_prev_gpu_draw = 0;
+static uint64_t s_prev_gp0_words = 0;
+/* PSXRecomp's C GPU counters: raster workload vs PS1 code execution.
+ * These are cumulative, not per-primitive timer queries (zero GPU stalls). */
+extern "C" void gpu_get_gp0_stats(uint64_t *nop, uint64_t *fill,
+                                  uint64_t *draw, uint64_t *env, uint64_t *copy);
+extern "C" uint64_t gpu_get_gp0_count(void);
+
 
 static int read_index(const char *name) {
     const char *v = getenv(name);
@@ -190,10 +198,18 @@ void r36s_exit_menu_tick(void) {
     ++s_profile_frames;
     const Uint32 dt = s_now - s_profile_start_ms;
     if (dt >= 5000) {
+        uint64_t nop=0, fill=0, draw=0, env=0, copy=0;
+        gpu_get_gp0_stats(&nop, &fill, &draw, &env, &copy);
+        const uint64_t gp0_words = gpu_get_gp0_count();
         fprintf(stdout,
-                "[R36S perf] simulated_vblanks=%u elapsed_ms=%u effective_fps=%.2f (refresh is NOT fps)\n",
+                "[R36S perf] simulated_vblanks=%u elapsed_ms=%u effective_fps=%.2f "
+                "gp0_draw_delta=%llu gp0_words_delta=%llu (refresh is NOT fps)\n",
                 s_profile_frames, (unsigned)dt,
-                (double)s_profile_frames * 1000.0 / (double)dt);
+                (double)s_profile_frames * 1000.0 / (double)dt,
+                (unsigned long long)(draw - s_prev_gpu_draw),
+                (unsigned long long)(gp0_words - s_prev_gp0_words));
+        s_prev_gpu_draw = draw;
+        s_prev_gp0_words = gp0_words;
         fflush(stdout);
         s_profile_frames = 0;
         s_profile_start_ms = s_now;
