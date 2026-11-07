@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential ca-certificates file git ninja-build \
     python3 python3-pip pkg-config \
-    libsdl2-dev zlib1g-dev libasound2-dev \
+    libsdl2-dev zlib1g-dev libasound2-dev libgles2-mesa-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Ubuntu focal's apt CMake (3.16) is too old for ValkyrieRecomp (>= 3.20).
