@@ -29,6 +29,7 @@
 #include "bionic_data_provider.h"
 #include "ndk_dloader.h"
 #include "saveops_provider.h"
+#include "bionic_stdio.h"
 #include <sys/stat.h>
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
@@ -42,6 +43,7 @@ static int g_unicode_binding_enabled=0;
 static int g_bionic_data_binding_enabled=0;
 static int g_dloader_binding_enabled=0;
 static int g_saveops_binding_enabled=0;
+static int g_bionic_stdio_binding_enabled=0;
 typedef struct {
     const char *label;
     uint8_t *raw, *image;
@@ -55,7 +57,7 @@ typedef struct {
 } Module;
 
 typedef struct {
-    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, unresolved, unsupported;
+    uint64_t relative, internal, partner, host_gles, host_portable, host_assets, host_logging, host_threads, host_fortify, host_cxx_lifecycle, host_fd, host_unicode, host_data, host_dl, host_saveops, host_stdio, unresolved, unsupported;
     uint64_t relocations;
 } LinkStats;
 
@@ -419,6 +421,11 @@ static int relocate_table(Module *m,Module *partner,
                        ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
                       lenneth_saveops_lookup(name,&value)) {
                 st->host_saveops++;
+            } else if(g_bionic_stdio_binding_enabled &&
+                      (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+                       ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+                      lenneth_bionic_stdio_lookup(name,&value)) {
+                st->host_stdio++;
             } else {
                 st->unresolved++;
                 continue;
@@ -486,7 +493,11 @@ static size_t dump_blockers(FILE *out,const Module *m,const Module *partner){
            (g_saveops_binding_enabled &&
             (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
              ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
-            lenneth_saveops_lookup(name,&address)))continue;
+            lenneth_saveops_lookup(name,&address)) ||
+           (g_bionic_stdio_binding_enabled &&
+            (ELF64_ST_TYPE(sym->st_info)==STT_FUNC ||
+             ELF64_ST_TYPE(sym->st_info)==STT_NOTYPE) &&
+            lenneth_bionic_stdio_lookup(name,&address)))continue;
         const char *risk=category(name);
         const char *strength=ELF64_ST_BIND(sym->st_info)==STB_WEAK?
                              "weak_optional":"strong_or_other";
@@ -558,6 +569,10 @@ static size_t unresolved_import_names(const Module *m,
            (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
             ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
            lenneth_saveops_lookup(name,&addr))continue;
+        if(g_bionic_stdio_binding_enabled &&
+           (ELF64_ST_TYPE(s->st_info)==STT_FUNC ||
+            ELF64_ST_TYPE(s->st_info)==STT_NOTYPE) &&
+           lenneth_bionic_stdio_lookup(name,&addr))continue;
         const char *cat=category(name);
         size_t c=6;
         for(size_t j=0;j<6;j++)if(strcmp(cat,tags[j])==0){c=j;break;}
@@ -585,6 +600,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
     g_bionic_data_binding_enabled=(provider_mode>=9);
     g_dloader_binding_enabled=(provider_mode>=10);
     g_saveops_binding_enabled=(provider_mode>=10);
+    g_bionic_stdio_binding_enabled=(provider_mode>=11);
     if(provider_mode>=1)provider_init();
     if(provider_mode>=2)lenneth_portable_open();
     if(provider_mode>=3){
@@ -619,9 +635,9 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
            " host_cxx_slots=%" PRIu64 " host_fd_slots=%" PRIu64
            " host_unicode_slots=%" PRIu64 " host_data_slots=%" PRIu64
            " host_dl_slots=%" PRIu64 " host_saveops_slots=%" PRIu64
-           " unsupported=%" PRIu64 "\n",
+           " host_stdio_slots=%" PRIu64 " unsupported=%" PRIu64 "\n",
            gs.relocations,gs.relative,gs.internal,gs.partner,
-           gs.unresolved,gs.host_gles,gs.host_portable,gs.host_assets,gs.host_logging,gs.host_threads,gs.host_fortify,gs.host_cxx_lifecycle,gs.host_fd,gs.host_unicode,gs.host_data,gs.host_dl,gs.host_saveops,gs.unsupported);
+           gs.unresolved,gs.host_gles,gs.host_portable,gs.host_assets,gs.host_logging,gs.host_threads,gs.host_fortify,gs.host_cxx_lifecycle,gs.host_fd,gs.host_unicode,gs.host_data,gs.host_dl,gs.host_saveops,gs.host_stdio,gs.unsupported);
     printf("[lenneth link] libc++_shared: relocs=%" PRIu64
            " RELATIVE=%" PRIu64 " internal=%" PRIu64
            " cross_game=%" PRIu64 " pending_host=%" PRIu64
@@ -633,7 +649,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
            " host_dl_slots=%" PRIu64 " host_saveops_slots=%" PRIu64
            " unsupported=%" PRIu64 "\n",
            cs.relocations,cs.relative,cs.internal,cs.partner,
-           cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.host_logging,cs.host_threads,cs.host_fortify,cs.host_cxx_lifecycle,cs.host_fd,cs.host_unicode,cs.host_data,cs.host_dl,cs.host_saveops,cs.unsupported);
+           cs.unresolved,cs.host_gles,cs.host_portable,cs.host_assets,cs.host_logging,cs.host_threads,cs.host_fortify,cs.host_cxx_lifecycle,cs.host_fd,cs.host_unicode,cs.host_data,cs.host_dl,cs.host_saveops,cs.host_stdio,cs.unsupported);
     size_t missing_game=unresolved_import_names(&game,&cxx);
     size_t missing_cxx=unresolved_import_names(&cxx,&game);
     printf("[lenneth link] unique_pending game=%zu cxx=%zu\n",
@@ -680,6 +696,7 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    " fd_shims=%" PRIu64 " unicode_shims=%" PRIu64
                    " bionic_data_shims=%" PRIu64
                    " dl_shims=%" PRIu64 " saveops_shims=%" PRIu64
+                   " stdio_proxy_shims=%" PRIu64
                    " unresolved_sites=%" PRIu64
                    " missing_name_entries=%zu unsupported_types=%" PRIu64
                    " guest_execution=NO\n",
@@ -695,10 +712,18 @@ int lenneth_link_preflight_mode(const char *game_path,const char *cxx_path,
                    gs.host_data+cs.host_data,
                    gs.host_dl+cs.host_dl,
                    gs.host_saveops+cs.host_saveops,
+                   gs.host_stdio+cs.host_stdio,
                    gs.unresolved+cs.unresolved,
                    missing_game+missing_cxx,
                    gs.unsupported+cs.unsupported);
         }
+        if(provider_mode>=11)
+            printf("[lenneth stdio] PHASE14_LINK=PASS guest_FILE_proxy_slots=%" PRIu64
+                   " outstanding_import_sites=%" PRIu64
+                   " legacy___sF_and_OpenSLES=UNRESOLVED "
+                   "commercial_execution=NO\n",
+                   gs.host_stdio+cs.host_stdio,
+                   gs.unresolved+cs.unresolved);
         if(provider_mode>=10)
             printf("[lenneth ndk-dl] PHASE13_LINK=PASS restricted_dl_slots=%" PRIu64
                    " safe_saveops_slots=%" PRIu64
@@ -792,6 +817,7 @@ cleanup:
     g_bionic_data_binding_enabled=0;
     g_dloader_binding_enabled=0;
     g_saveops_binding_enabled=0;
+    g_bionic_stdio_binding_enabled=0;
     if(provider_mode>=10){lenneth_saveops_close();lenneth_ndk_dl_close_all();}
     if(provider_mode>=9)lenneth_fd_provider_close();
     unload(&game);
@@ -956,4 +982,7 @@ int lenneth_batch_io_plan(const char *game_path,const char *cxx_path) {
 }
 int lenneth_batch_dl_plan(const char *game_path,const char *cxx_path) {
     return lenneth_link_preflight_mode(game_path,cxx_path,10);
+}
+int lenneth_batch_stdio_plan(const char *game_path,const char *cxx_path) {
+    return lenneth_link_preflight_mode(game_path,cxx_path,11);
 }
