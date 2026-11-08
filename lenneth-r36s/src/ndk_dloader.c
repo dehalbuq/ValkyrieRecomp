@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { MAX_GUEST_MODULES=2 };
+enum { MAX_GUEST_MODULES=3 };
 typedef struct {
     const char *guest_soname,*major,*minor;
     void *host;
@@ -27,7 +27,10 @@ typedef struct {
 } GuestModule;
 static GuestModule modules[MAX_GUEST_MODULES]={
     {"libGLESv2.so","libGLESv2.so.2","libGLESv2.so",NULL,0},
-    {"libEGL.so","libEGL.so.1","libEGL.so",NULL,0}
+    {"libEGL.so","libEGL.so.1","libEGL.so",NULL,0},
+    /* Phase26: optional native ES1 provider. Not an ES1->ES2 translator.
+     * Guest dlopen fails closed if no native ES1 implementation exists. */
+    {"libGLESv1_CM.so","libGLESv1_CM.so.1","libGLESv1_CM.so",NULL,0}
 };
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static _Thread_local char last_error[192];
@@ -161,11 +164,21 @@ int lenneth_ndk_dl_selftest(void){
     if(egl && guest_dlclose(egl)!=0)ok=0;
     if(gl && guest_dlclose(gl)==0)ok=0;
     if(gl && !guest_dlerror())ok=0;
+    /* Optional GLES1: absent is an expected, nonfatal host capability.
+     * Never pass guest code a fake GLES1 handle backed only by GLES2. */
+    void *g1=guest_dlopen("libGLESv1_CM.so",RTLD_NOW);
+    if(g1){
+        void *legacy=guest_dlsym(g1,"glMatrixMode");
+        if(!legacy && !guest_dlerror())ok=0;
+        if(guest_dlsym(g1,"system")!=NULL)ok=0;
+        if(!guest_dlerror())ok=0;
+        if(guest_dlclose(g1)!=0)ok=0;
+    }else if(!guest_dlerror())ok=0;
     uint64_t p=0;
     if(!lenneth_ndk_dl_lookup("dlopen",&p)||!p ||
        lenneth_ndk_dl_lookup("dl_iterate_phdr",&p))ok=0;
     printf("[lenneth ndk-dl] SELFTEST=%s host_GLES_EGL=allowlisted "
-           "guest_paths=DENIED guest_handles=isolated "
+           "guest_paths=DENIED guest_handles=isolated guest_gles1=OPTIONAL_NATIVE_ONLY "
            "dl_iterate_phdr=NOT_MAPPED commercial_execution=NO\n",
            ok?"PASS":"FAIL");
     return ok?0:8;
