@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase28 EGL ES1 context selection and function dispatch diagnostics
+name: Lenneth Android R36S - ARM64 phase29 native GLES1 fixed function raster readback
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase28-staging
+      - port/lenneth-phase29-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -1066,6 +1066,28 @@ jobs:
             exit 1
           fi
 
+      - name: Phase29 GLES1 pbuffer fixed-function raster and safe headless behavior
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --gles1-render29-selftest | tee lenneth-phase29-selftest.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase29-selftest.txt
+          grep -q 'color_readback_classifier=PASS' lenneth-phase29-selftest.txt
+          grep -q 'EGL_procaddress_only=1' lenneth-phase29-selftest.txt
+          SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+            ./build-lenneth/lenneth-probe --gles1-render29 | tee lenneth-phase29-headless.txt
+          grep -q 'GLES1_RASTER=UNVERIFIED' lenneth-phase29-headless.txt
+          grep -q 'FINAL_ES1_RASTER.*UNVERIFIED' lenneth-gles1-raster29.tsv
+          grep -q 'COMMERCIAL_ENGINE.*BLOCKED' lenneth-gles1-raster29.tsv
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase25_game.so /tmp/phase3_partner.so | tee lenneth-phase29-batch.txt
+          grep -q 'phase29.*SELFTEST=PASS' lenneth-phase29-batch.txt
+          grep -q 'Phase29 native ES1 1.1 raster/readback classifier: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase29-batch.txt
+          grep -q 'engine_executed=NO' lenneth-phase29-batch.txt
+          if ./build-lenneth/lenneth-probe --gles1-render29-selftest -bad; then
+            echo 'ERROR: Phase29 accepted additional arguments'
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -1080,13 +1102,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase28-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase28-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase28-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase29-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase29-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase29-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase28
-          path: lenneth-r36s-multitest-phase28-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase29
+          path: lenneth-r36s-multitest-phase29-arm64.zip
           if-no-files-found: error
           retention-days: 14
