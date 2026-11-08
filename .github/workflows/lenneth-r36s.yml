@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase27 native GLES1 context and JNI Invocation ABI fixtures
+name: Lenneth Android R36S - ARM64 phase28 EGL ES1 context selection and function dispatch diagnostics
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase27-staging
+      - port/lenneth-phase28-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -1044,6 +1044,28 @@ jobs:
           grep -q 'FINAL=PASS' lenneth-phase27-batch.txt
           grep -q 'engine_executed=NO' lenneth-phase27-batch.txt
 
+      - name: Phase28 SDL/EGL GLES1 selection and function pointer provenance tests
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --gles1-context28-selftest | tee lenneth-phase28-selftest.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase28-selftest.txt
+          grep -q 'SDL_EGL_version_checks=PASS' lenneth-phase28-selftest.txt
+          grep -q 'dispatch_source_classifier=PASS' lenneth-phase28-selftest.txt
+          SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+            ./build-lenneth/lenneth-probe --gles1-context28 | tee lenneth-phase28-headless.txt
+          grep -q 'ES1_SELECTION=UNVERIFIED' lenneth-phase28-headless.txt
+          grep -q 'FINAL_ES1_VALIDATION.*UNVERIFIED' lenneth-gles1-selection28.tsv
+          grep -q 'COMMERCIAL_ENGINE.*BLOCKED' lenneth-gles1-selection28.tsv
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase25_game.so /tmp/phase3_partner.so | tee lenneth-phase28-batch.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase28-batch.txt
+          grep -q 'Phase28 native SDL/EGL dispatch and pbuffer classifier fixture: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase28-batch.txt
+          grep -q 'engine_executed=NO' lenneth-phase28-batch.txt
+          if ./build-lenneth/lenneth-probe --gles1-context28-selftest -extra; then
+            echo 'ERROR: Phase28 accepted invalid CLI arguments'
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -1058,13 +1080,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase27-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase27-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase27-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase28-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase28-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase28-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase27
-          path: lenneth-r36s-multitest-phase27-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase28
+          path: lenneth-r36s-multitest-phase28-arm64.zip
           if-no-files-found: error
           retention-days: 14
