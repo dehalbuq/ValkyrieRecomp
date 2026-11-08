@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase24 Android startup metadata readiness audit
+name: Lenneth Android R36S - ARM64 phase25 GLES1 and constructor table startup audit
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase24-staging
+      - port/lenneth-phase25-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -930,6 +930,46 @@ jobs:
             exit 1
           fi
 
+      - name: Phase25 AArch64 constructor relocation and GLES1 fixed function inventory
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --startup25-selftest | tee lenneth-phase25-selftest.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase25-selftest.txt
+          grep -q 'fixed_function_classifier=PASS' lenneth-phase25-selftest.txt
+          cat > /tmp/phase25_fakegles1.c <<'EOF'
+          void glMatrixMode(unsigned int m){ (void)m; }
+          EOF
+          cc -shared -fPIC -Wl,-soname,libGLESv1_CM.so -o /tmp/libGLESv1_CM.so /tmp/phase25_fakegles1.c
+          cat > /tmp/phase25_game.c <<'EOF'
+          #include <stdint.h>
+          extern void glMatrixMode(unsigned int);
+          static void (*volatile imported_fixed)(unsigned int)=glMatrixMode;
+          static int counter;
+          __attribute__((constructor)) static void first(void){counter=1;}
+          __attribute__((constructor)) static void second(void){counter+=2;}
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *arg){
+            (void)vm;(void)arg;
+            return counter + (imported_fixed!=0);
+          }
+          EOF
+          cc -shared -fPIC -Wl,-z,relro -Wl,--no-as-needed -L/tmp -o /tmp/phase25_game.so /tmp/phase25_game.c -lGLESv1_CM
+          ./build-lenneth/lenneth-probe --startup25 /tmp/phase25_game.so /tmp/phase3_partner.so | tee lenneth-phase25-inventory.txt
+          grep -q 'STARTUP_PLAN=PASS' lenneth-phase25-inventory.txt
+          grep -q 'gles1_needed=1' lenneth-phase25-inventory.txt
+          grep -Eq 'ctor_slots_total=[1-9][0-9]*' lenneth-phase25-inventory.txt
+          grep -q 'fixed_function_imports=1' lenneth-phase25-inventory.txt
+          grep -q 'GLES1_FIXED_FUNCTION_IMPORT.*glMatrixMode' lenneth-phase25-startup-plan.tsv
+          grep -q 'CONSTRUCTOR_PLAN.*BLOCKED' lenneth-phase25-startup-plan.tsv
+          grep -q 'GLES1_HOST_PROBE.*BLOCKED' lenneth-phase25-startup-plan.tsv
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase24_metadata.so /tmp/phase3_partner.so | tee lenneth-phase25-batch.txt
+          grep -q 'STARTUP_PLAN=PASS' lenneth-phase25-batch.txt
+          grep -q 'Phase25 private ELF constructors and OpenGL ES1 import plan: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase25-batch.txt
+          grep -q 'COMMERCIAL_ENGINE.*BLOCKED' lenneth-phase25-startup-plan.tsv
+          if ./build-lenneth/lenneth-probe --startup25 /etc/os-release /tmp/phase3_partner.so; then
+            echo 'ERROR: invalid ELF accepted in Phase25'
+            exit 1
+          fi
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -944,13 +984,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase24-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase24-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase24-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase25-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase25-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase25-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase24
-          path: lenneth-r36s-multitest-phase24-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase25
+          path: lenneth-r36s-multitest-phase25-arm64.zip
           if-no-files-found: error
           retention-days: 14
