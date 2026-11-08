@@ -260,7 +260,8 @@ int lenneth_jni_demand31(const char *game_path,const char *cxx_path){
         "asset_filesystem_shim_not_Java_AssetManager");
     row(out,"runtime","COMMERCIAL_ENGINE","BLOCKED",
         "no_game_constructor_no_JNI_OnLoad_no_commercial_code");
-    int failed=ferror(out) || fclose(out)!=0;
+    int failed=ferror(out);
+    if(fclose(out)!=0)failed=1;
     int ok=c_ok&&g_ok&&!failed;
     printf("[lenneth phase31] JNI_DEMAND=%s game_exports=%u "
            "cocos_exports=%u classes=%u methods=%u bionic_jump_imports=%u "
