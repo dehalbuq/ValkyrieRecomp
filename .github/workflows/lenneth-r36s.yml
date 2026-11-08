@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase25 GLES1 and constructor table startup audit
+name: Lenneth Android R36S - ARM64 phase26 GLES1 system provider and optional guest dlopen audit
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase25-staging
+      - port/lenneth-phase26-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -970,6 +970,55 @@ jobs:
             echo 'ERROR: invalid ELF accepted in Phase25'
             exit 1
           fi
+      - name: Phase26 test optional native GLES1 and fail-closed guest symbols
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --gles1-probe26-selftest | tee lenneth-phase26-fixture.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase26-fixture.txt
+          grep -q 'phase25_plan_parser=PASS' lenneth-phase26-fixture.txt
+          mkdir -p /tmp/lenneth-phase26-full /tmp/lenneth-phase26-partial
+          cat >/tmp/lenneth-phase26-full/es1.c <<'EOF'
+          void glMatrixMode(unsigned int mode){(void)mode;}
+          void glLoadIdentity(void){}
+          void glVertexPointer(int n,unsigned int t,int stride,const void *p){
+            (void)n;(void)t;(void)stride;(void)p;
+          }
+          void glEnableClientState(unsigned int state){(void)state;}
+          EOF
+          cc -shared -fPIC -Wl,-soname,libGLESv1_CM.so.1 \
+             -o /tmp/lenneth-phase26-full/libGLESv1_CM.so.1 /tmp/lenneth-phase26-full/es1.c
+          LD_LIBRARY_PATH=/tmp/lenneth-phase26-full \
+            ./build-lenneth/lenneth-probe --gles1-probe26 /tmp/phase25_game.so /tmp/phase3_partner.so | tee phase26-complete.txt
+          grep -q 'GLES1_PROBE=PASS' phase26-complete.txt
+          grep -q 'gles1_available=1 essential_symbols=4/4' phase26-complete.txt
+          grep -q 'game_needs_gles1=1 game_fixed_imports=1' phase26-complete.txt
+          grep -q 'GLES1_EGL_CONTEXT.*NOT_TESTED' lenneth-gles1-runtime26.tsv
+          grep -q 'GLES1_ENGINE_BINDING.*BLOCKED' lenneth-gles1-runtime26.tsv
+          LD_LIBRARY_PATH=/tmp/lenneth-phase26-full \
+            ./build-lenneth/lenneth-probe --ndk-dl-selftest | tee phase26-dloader.txt
+          grep -q 'SELFTEST=PASS' phase26-dloader.txt
+          cat >/tmp/lenneth-phase26-partial/es1.c <<'EOF'
+          void glMatrixMode(unsigned int mode){(void)mode;}
+          EOF
+          cc -shared -fPIC -Wl,-soname,libGLESv1_CM.so.1 \
+             -o /tmp/lenneth-phase26-partial/libGLESv1_CM.so.1 /tmp/lenneth-phase26-partial/es1.c
+          LD_LIBRARY_PATH=/tmp/lenneth-phase26-partial \
+            ./build-lenneth/lenneth-probe --gles1-probe26 /tmp/phase25_game.so /tmp/phase3_partner.so | tee phase26-partial.txt
+          grep -q 'GLES1_PROBE=PASS' phase26-partial.txt
+          grep -q 'gles1_available=1 essential_symbols=1/4' phase26-partial.txt
+          grep -q 'glLoadIdentity.*MISSING' lenneth-gles1-runtime26.tsv
+          LD_LIBRARY_PATH=/tmp/lenneth-phase26-full \
+            ./build-lenneth/lenneth-probe --batch-headless /tmp/phase25_game.so /tmp/phase3_partner.so | tee phase26-batch.txt
+          grep -q 'GLES1_PROBE=PASS' phase26-batch.txt
+          grep -q 'gles1_available=1 essential_symbols=4/4' phase26-batch.txt
+          grep -q 'Phase26 host GLES1 symbol availability without GL calls: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' phase26-batch.txt
+          grep -q 'engine_executed=NO' phase26-batch.txt
+          if ./build-lenneth/lenneth-probe --gles1-probe26 /etc/os-release /tmp/phase3_partner.so; then
+            echo 'ERROR: malformed ELF accepted by Phase26'
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -984,13 +1033,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase25-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase25-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase25-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase26-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase26-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase26-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase25
-          path: lenneth-r36s-multitest-phase25-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase26
+          path: lenneth-r36s-multitest-phase26-arm64.zip
           if-no-files-found: error
           retention-days: 14
