@@ -1105,3 +1105,12 @@ Phase26's physical R36S diagnostic confirmed that `libGLESv1_CM.so` is present w
 Phase27 additionally tests a fully synthetic, **unexposed** JNI Invocation ABI (JavaVM GetEnv / attach / detach, JNIEnv GetVersion, thread-local JNI environments, synthetic JNI_OnLoad function). `FindClass` is intentionally denied because a real Android ART runtime and app class loader have **NOT** been implemented. None of this is attached to the game's ELF and commercial `JNI_OnLoad` remains **NOT INVOKED**. It is a regression fixture toward the later Android lifecycle implementation.
 
 The ZIP contains only the open-source ARM64 probe launcher and synthetic fixtures, never proprietary APK files, game libraries, JNI calls or original assets.
+
+
+## Phase 28 — identify real EGL context and GLES1 dispatch selection (standalone)
+
+The R36S Phase27 physical report found the optional native GLES1 library and 4/4 checked legacy exports, but the requested SDL GLES1 context produced an empty string from directly loaded \`libGLESv1_CM.so\`'s \`glGetString(GL_VERSION)\`. The earlier diagnostic could only say the context was created, not which client version was selected.
+
+This phase (a) requests SDL ES1.1 and queries its **actual SDL and EGL client version**, (b) records the bound EGL API and supported client API list, (c) queries \`glGetString\` via three independent pathways: the native GLES1 \`dlsym\`, \`SDL_GL_GetProcAddress\` and \`eglGetProcAddress\`, and (d) if an ES1-compatible EGL Pbuffer config exists, attempts a tiny **explicit ES1 context** on the existing SDL display, tests the fixed-function matrix state and restores the old context. All capabilities are reported independently: \`FOUND\`, \`CREATED\`, \`ES1\`, \`PASS\` and \`UNVERIFIED\` must not be conflated. No commercial code or assets are loaded. The test has an internal alarm plus optional shell timeout, and runs in a separate process *after* the earlier regressions.
+
+The output adds \`lenneth-gles1-selection28.tsv\` as the **eighth** short text report in the single PortMaster diagnostic ZIP. It is safe to fail: driver failures will not block archiving the preceding results. The game and proprietary library constructors and JNI entrypoints are never executed. All startup/JNI/real OpenSL integration remains unimplemented.
