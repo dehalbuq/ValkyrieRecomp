@@ -152,3 +152,28 @@ int lenneth_jni_synthetic27_selftest(void){
            ok?"PASS":"FAIL");
     return ok?0:27;
 }
+
+
+/* Phase30 startup replay with only the marker-verified synthetic ELF.
+ * No part of this is installed as a JNI bridge for the commercial engine. */
+int lenneth_jni27_replay_mock(Lenneth30MockOnload onload,
+                              Lenneth30MockInit init,
+                              Lenneth30MockRender render){
+    if(!onload||!init||!render)return 30;
+    JavaVM27 vm_pointer=&vm_functions;
+    JavaVM27 *vm=&vm_pointer;
+    void *env=NULL;
+    int attached=(*vm)->AttachCurrentThread(vm,&env,NULL)==J_OK && env;
+    int returned=attached?onload(vm,NULL):J_ERR;
+    if(attached&&returned==J_VERSION_1_6){
+        init(env,NULL,640,480);
+        render(env,NULL);
+    }
+    int detached=attached && (*vm)->DetachCurrentThread(vm)==J_OK;
+    int ok=attached && detached && returned==J_VERSION_1_6;
+    printf("[lenneth phase30] SYNTHETIC_JNI=%s onload_version=0x%x "
+           "nativeInit=nativeRender=MOCK_ONLY threads_detached=%d "
+           "guest_commercial_executed=NO\n",
+           ok?"PASS":"FAIL",returned,detached);
+    return ok?0:30;
+}
