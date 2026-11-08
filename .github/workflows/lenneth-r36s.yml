@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase30 verified synthetic native constructor and JNI lifecycle replay
+name: Lenneth Android R36S - ARM64 phase31 JNI Cocos and Bionic guest demand audit
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase30-staging
+      - port/lenneth-phase31-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -1145,6 +1145,55 @@ jobs:
           grep -q 'Phase30 guarded native constructor and JNI lifecycle: SYNTHETIC_ELF_AFTER_BATCH' lenneth-suite-summary.txt
           grep -q 'Game engine invoked: NO' lenneth-suite-summary.txt
 
+      - name: Phase31 verify read-only JNI exports Cocos references and Bionic ABI hints
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --jni-demand31-selftest | tee lenneth-phase31-selftest.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase31-selftest.txt
+          grep -q 'historical_bionic_offsets=PASS' lenneth-phase31-selftest.txt
+          cat >/tmp/phase31_mock.c <<'EOF'
+          #include <stdint.h>
+          __attribute__((used)) static const char jni_class0[] =
+              "org/cocos2dx/lib/Cocos2dxHelper";
+          __attribute__((used)) static const char jni_class1[] =
+              "org/cocos2dx/lib/Cocos2dxRenderer";
+          __attribute__((used)) static const char jni_method[] =
+              "getCocos2dxWritablePath";
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *u){return vm&&u?0:0x00010006;}
+          __attribute__((visibility("default")))
+          void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit(
+              void *env,void *obj,int width,int height) {
+              (void)env;(void)obj;(void)width;(void)height;
+          }
+          __attribute__((visibility("default")))
+          void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeRender(
+              void *env,void *obj){(void)env;(void)obj;}
+          EOF
+          cc -shared -nostdlib -fPIC -O2 -Wl,-z,relro \
+            -o /tmp/phase31_mock.so /tmp/phase31_mock.c
+          ./build-lenneth/lenneth-probe --jni-demand31 \
+            /tmp/phase31_mock.so /tmp/lenneth_phase30_partner.so | tee lenneth-phase31-inventory.txt
+          grep -q 'JNI_DEMAND=PASS' lenneth-phase31-inventory.txt
+          grep -q 'game_exports=3' lenneth-phase31-inventory.txt
+          grep -q 'JNI_BOOTSTRAP_EXPORTS.*JNI_OnLoad=1 nativeInit=1 nativeRender=1' lenneth-jni-demand31.tsv
+          grep -q 'JNI_CLASS_LITERAL.*FOUND.*org/cocos2dx/lib/Cocos2dxRenderer' lenneth-jni-demand31.tsv
+          grep -q 'JNI_CLASS_LITERAL.*FOUND.*org/cocos2dx/lib/Cocos2dxHelper' lenneth-jni-demand31.tsv
+          grep -q 'JNI_METHOD_LITERAL.*FOUND.*getCocos2dxWritablePath' lenneth-jni-demand31.tsv
+          grep -q 'JNI_NATIVE_EXPORT.*Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit' lenneth-jni-demand31.tsv
+          grep -q 'JNI_CLASSLOADER_AND_ART.*BLOCKED' lenneth-jni-demand31.tsv
+          grep -q 'COMMERCIAL_ENGINE.*BLOCKED' lenneth-jni-demand31.tsv
+          if ./build-lenneth/lenneth-probe --jni-demand31 /etc/os-release /tmp/lenneth_phase30_partner.so; then
+            echo 'ERROR: malformed ELF accepted in phase31'
+            exit 1
+          fi
+          ./build-lenneth/lenneth-probe --batch-headless \
+            /tmp/phase25_game.so /tmp/phase3_partner.so | tee lenneth-phase31-batch.txt
+          grep -q 'FINAL=PASS' lenneth-phase31-batch.txt
+          grep -q 'Phase31 private-library JNI class/method reference inventory: PASS' lenneth-suite-summary.txt
+          grep -q 'Phase31 JNI demand scanner / historical Bionic offset selftest: PASS' lenneth-suite-summary.txt
+          grep -q 'engine_executed=NO' lenneth-phase31-batch.txt
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -1161,13 +1210,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase30-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase30-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase30-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase31-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase31-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase31-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase30
-          path: lenneth-r36s-multitest-phase30-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase31
+          path: lenneth-r36s-multitest-phase31-arm64.zip
           if-no-files-found: error
           retention-days: 14
