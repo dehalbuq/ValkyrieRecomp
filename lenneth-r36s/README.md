@@ -1075,3 +1075,9 @@ Source evidence: the deprecated strong `__sF` import from `libMyGame.so` indicat
 The self-test **actually executes** synthetic nested stack-frame jumps with a nonzero and zero value, restores an altered `SIGUSR1` signal mask, and confirms that a deliberately corrupt magic aborts in a forked child. The original game's instructions remain unexecuted.
 
 The ELF linker only exposes these two bindings when the guest `libMyGame.so` has an unresolved legacy `__sF` **data** import. This is a *heuristic*, not a complete Android version proof; newer Bionic jmp buffers use cookies/checksums and are deliberately unsupported. The Phase22 ABI-only audit continues to report that modern formats are unmapped. No Android game assets are included. Binding all names cannot substitute for testing JNI, constructor order, TLS, rendering, PCM OpenSL, save persistence or actual game logic in a later carefully gated phase.
+
+## Phase24 read-only startup readiness (no Android engine execution)
+
+Private ARM64 ELFs have **zero unresolved relocation sites** in the user's Phase23 R36S log. Phase24 inspects their DT_NEEDED dependencies, DT_INIT / DT_INIT_ARRAY constructors, finalizers, PT_TLS, PT_GNU_RELRO, PT_GNU_STACK, PF_W|PF_X flags, and JNI entrypoint exports **without executing any commercial code**. A fourth text report, `lenneth-startup-gates.tsv`, records metadata and outstanding startup requirements. All previous synthetic ARM64/JNI/ALSA/GLES2/controller tests remain in a single PortMaster run.
+
+Even when import binding is complete, Android `JavaVM/JNIEnv` and class-loader context, native constructor ordering, Cocos2dx lifecycle and guest OpenSL PCM queues are still **NOT IMPLEMENTED**. Calling proprietary `JNI_OnLoad` before those requirements are addressed may corrupt state or crash. This phase does not claim execution readiness and does not distribute copyrighted game files.

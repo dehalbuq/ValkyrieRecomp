@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 23: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 24: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 23 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 24 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -22,7 +22,7 @@ echo "[lenneth suite] Additional bounded Bionic FORTIFY/errno adapters and synth
 echo "[lenneth suite] C++ lifecycle + independent synthetic ARM64 executable loader test enabled."
 echo "[lenneth suite] Phase12: sandboxed POSIX fd, raw UTF-32 and process-local stack guard tests enabled."
 echo "[lenneth suite] Phase13: allowlisted GLES/EGL guest dl* handles, save-only rename/mkdir/remove, and scalar wchar operations."
-echo "[lenneth suite] Phase14: opaque FILE proxy diagnostics; legacy Bionic __sF remains unresolved."
+echo "[lenneth suite] Phase14: opaque FILE proxy; Phase22 resolves legacy __sF data separately."
 echo "[lenneth suite] Phase15: OpenSL ES ABI remains synthetic (guest PCM not wired)."
 echo "[lenneth suite] Phase16: native SDL2/ALSA PCM playback fixture retained."
 echo "[lenneth suite] Phase17: sandboxed directory/time/text/logging ABI tests retained."
@@ -31,7 +31,8 @@ echo "[lenneth suite] Phase19: Bionic stat/fstat and sysconf regression tests re
 echo "[lenneth suite] Phase20: sandboxed fdopen, priority and syscall regression tests retained."
 echo "[lenneth suite] Phase21: guest-only ELF program headers and shell denial retained."
 echo "[lenneth suite] Phase22: Bionic legacy __sF[3] data and historical jump ABI audit retained."
-echo "[lenneth suite] Phase23: early-Bionic 256-byte native AArch64 nonlocal jump fixture (registers, stack, signals, malformed context)."
+echo "[lenneth suite] Phase23: native AArch64 nonlocal jump tests retained."
+echo "[lenneth suite] Phase24: read-only startup dependency/constructor/TLS/JNI safety gate audit."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
@@ -74,7 +75,7 @@ fi
 if [ ! -d saves ]; then
     mkdir -m 700 -p saves 2>/dev/null || echo "[lenneth fd] cannot create app-private saves directory"
 fi
-rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv"
+rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv" "$root/lenneth-startup-gates.tsv"
 echo "[lenneth synthetic] Testing explicitly marked original synthetic ARM64 modules."
 synthetic_rc=9
 if [ -f mock/synthetic_guest.so ] && [ -f mock/synthetic_partner.so ]; then
@@ -120,20 +121,20 @@ if [ -f "$root/lenneth-suite-summary.txt" ]; then
 fi
 if [ "$synthetic_rc" -ne 0 ] && [ "$rc" -eq 0 ]; then rc=13; fi
 
-# Package only three text reports. Never include libraries or game assets.
-if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ]; then
+# Package only four text reports. Never include libraries or game assets.
+if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ]; then
     if command -v zip >/dev/null 2>&1; then
         (cd "$root" && zip -q -j "lenneth-r36s-diagnostics.zip" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv") \
           || echo "[lenneth suite] zip report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.zip"
     elif command -v tar >/dev/null 2>&1; then
         (cd "$root" && tar -czf "lenneth-r36s-diagnostics.tar.gz" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv") \
           || echo "[lenneth suite] tar report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.tar.gz"
     fi
 fi
-echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv"
+echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv, lenneth-startup-gates.tsv"
 if declare -F pm_finish >/dev/null; then pm_finish; fi
 exit "$rc"
