@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 30: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 31: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 30 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 31 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -38,7 +38,8 @@ echo "[lenneth suite] Phase26: native GLES1 library/export availability probe re
 echo "[lenneth suite] Phase27: isolated JNI ABI and SDL/EGL GLES1 tests retained."
 echo "[lenneth suite] Phase28: EGL ES1 dispatch diagnosis and validated standalone context retained."
 echo "[lenneth suite] Phase29: native GLES1 fixed-function raster readback verified."
-echo "[lenneth suite] Phase30: execute ONLY two public synthetic AArch64 constructors and mock JNI lifecycle in strict order."
+echo "[lenneth suite] Phase30: marker-verified mock constructors and mock JNI callbacks retained."
+echo "[lenneth suite] Phase31: read-only complete JNI exports plus allowlisted Cocos Java class/method literal audit."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
@@ -81,7 +82,7 @@ fi
 if [ ! -d saves ]; then
     mkdir -m 700 -p saves 2>/dev/null || echo "[lenneth fd] cannot create app-private saves directory"
 fi
-rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv" "$root/lenneth-startup-gates.tsv" "$root/lenneth-phase25-startup-plan.tsv" "$root/lenneth-gles1-runtime26.tsv" "$root/lenneth-gles1-context27.tsv" "$root/lenneth-gles1-selection28.tsv" "$root/lenneth-gles1-raster29.tsv" "$root/lenneth-phase30-lifecycle.tsv"
+rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv" "$root/lenneth-startup-gates.tsv" "$root/lenneth-phase25-startup-plan.tsv" "$root/lenneth-gles1-runtime26.tsv" "$root/lenneth-gles1-context27.tsv" "$root/lenneth-gles1-selection28.tsv" "$root/lenneth-gles1-raster29.tsv" "$root/lenneth-phase30-lifecycle.tsv" "$root/lenneth-jni-demand31.tsv"
 echo "[lenneth synthetic] Testing explicitly marked original synthetic ARM64 modules."
 synthetic_rc=9
 if [ -f mock/synthetic_guest.so ] && [ -f mock/synthetic_partner.so ]; then
@@ -226,20 +227,20 @@ else
     if [ "$rc" -eq 0 ]; then rc=30; fi
 fi
 
-# Package only ten text reports. Never include libraries or game assets.
-if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ] && [ -f "$root/lenneth-phase25-startup-plan.tsv" ] && [ -f "$root/lenneth-gles1-runtime26.tsv" ] && [ -f "$root/lenneth-gles1-context27.tsv" ] && [ -f "$root/lenneth-gles1-selection28.tsv" ] && [ -f "$root/lenneth-gles1-raster29.tsv" ] && [ -f "$root/lenneth-phase30-lifecycle.tsv" ]; then
+# Package only eleven text reports. Never include libraries or game assets.
+if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ] && [ -f "$root/lenneth-phase25-startup-plan.tsv" ] && [ -f "$root/lenneth-gles1-runtime26.tsv" ] && [ -f "$root/lenneth-gles1-context27.tsv" ] && [ -f "$root/lenneth-gles1-selection28.tsv" ] && [ -f "$root/lenneth-gles1-raster29.tsv" ] && [ -f "$root/lenneth-phase30-lifecycle.tsv" ] && [ -f "$root/lenneth-jni-demand31.tsv" ]; then
     if command -v zip >/dev/null 2>&1; then
         (cd "$root" && zip -q -j "lenneth-r36s-diagnostics.zip" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv" "lenneth-gles1-selection28.tsv" "lenneth-gles1-raster29.tsv" "lenneth-phase30-lifecycle.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv" "lenneth-gles1-selection28.tsv" "lenneth-gles1-raster29.tsv" "lenneth-phase30-lifecycle.tsv" "lenneth-jni-demand31.tsv") \
           || echo "[lenneth suite] zip report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.zip"
     elif command -v tar >/dev/null 2>&1; then
         (cd "$root" && tar -czf "lenneth-r36s-diagnostics.tar.gz" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv" "lenneth-gles1-selection28.tsv" "lenneth-gles1-raster29.tsv" "lenneth-phase30-lifecycle.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv" "lenneth-gles1-selection28.tsv" "lenneth-gles1-raster29.tsv" "lenneth-phase30-lifecycle.tsv" "lenneth-jni-demand31.tsv") \
           || echo "[lenneth suite] tar report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.tar.gz"
     fi
 fi
-echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv, lenneth-startup-gates.tsv, lenneth-phase25-startup-plan.tsv, lenneth-gles1-runtime26.tsv, lenneth-gles1-context27.tsv, lenneth-gles1-selection28.tsv, lenneth-gles1-raster29.tsv, lenneth-phase30-lifecycle.tsv"
+echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv, lenneth-startup-gates.tsv, lenneth-phase25-startup-plan.tsv, lenneth-gles1-runtime26.tsv, lenneth-gles1-context27.tsv, lenneth-gles1-selection28.tsv, lenneth-gles1-raster29.tsv, lenneth-phase30-lifecycle.tsv, lenneth-jni-demand31.tsv"
 if declare -F pm_finish >/dev/null; then pm_finish; fi
 exit "$rc"
