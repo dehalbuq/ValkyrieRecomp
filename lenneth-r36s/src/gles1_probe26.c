@@ -32,9 +32,9 @@ static int parse_phase25_plan(GameGL *game,GameGL *cxx){
     while(fgets(line,sizeof(line),f)){
         const char *module=NULL;
         GameGL *target=NULL;
-        if(strncmp(line,"libMyGame.so\tGLES1_COMPATIBILITY\t",34)==0){
+        if(strncmp(line,"libMyGame.so\tGLES1_COMPATIBILITY\t",33)==0){
             module="libMyGame.so";target=game;
-        }else if(strncmp(line,"libc++_shared.so\tGLES1_COMPATIBILITY\t",38)==0){
+        }else if(strncmp(line,"libc++_shared.so\tGLES1_COMPATIBILITY\t",37)==0){
             module="libc++_shared.so";target=cxx;
         }
         if(!target)continue;
