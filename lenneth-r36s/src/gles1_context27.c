@@ -9,6 +9,7 @@
 #define _GNU_SOURCE
 #include "gles1_context27.h"
 #include <SDL.h>
+#include <EGL/egl.h>
 #include <dlfcn.h>
 #include <signal.h>
 #include <stdint.h>
@@ -101,8 +102,16 @@ int lenneth_gles1_context27_probe(void){
     LoadIdentityFn gl_identity=NULL;
     ClearColorFn gl_color=NULL;
     ClearFn gl_clear=NULL;
-#define TRANSFER(slot,name) do {sym=dlsym(legacy,name); \
-    if(sizeof(slot)==sizeof(sym))memcpy(&(slot),&sym,sizeof(slot));}while(0)
+/* Phase29 correction: R36S Phase28 proved eglGetProcAddress is the
+ * usable GLES1 dispatcher; native dlsym's glGetString returned NULL.
+ * Try the EGL dispatch first, then use the native symbol as a guarded
+ * fallback. This still invokes only independent synthetic GL commands. */
+#define TRANSFER(slot,name) do { \
+    __eglMustCastToProperFunctionPointerType eglsym=eglGetProcAddress(name); \
+    if(sizeof(slot)==sizeof(eglsym))memcpy(&(slot),&eglsym,sizeof(slot)); \
+    if(!(slot)){sym=dlsym(legacy,name); \
+        if(sizeof(slot)==sizeof(sym))memcpy(&(slot),&sym,sizeof(slot));} \
+}while(0)
     TRANSFER(gl_version,"glGetString");
     TRANSFER(gl_error,"glGetError");
     TRANSFER(gl_matrix,"glMatrixMode");
