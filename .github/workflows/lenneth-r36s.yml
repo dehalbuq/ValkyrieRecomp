@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase23 native Bionic AArch64 jump suite
+name: Lenneth Android R36S - ARM64 phase24 Android startup metadata readiness audit
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase23-staging
+      - port/lenneth-phase24-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -880,6 +880,56 @@ jobs:
           grep -q 'setjmp' lenneth-blockers.tsv
           grep -q 'longjmp' lenneth-blockers.tsv
           grep -q 'FINAL=PASS' phase23-gate-denied.txt
+      - name: Phase24 verify read-only startup metadata, JNI and ELF constructor inventory
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --startup24-selftest | tee lenneth-phase24-selftest.txt
+          grep -q 'SELFTEST=PASS' lenneth-phase24-selftest.txt
+          grep -q 'filename_sanitization=PASS' lenneth-phase24-selftest.txt
+          cat > /tmp/lenneth_phase24_mock.c <<'EOF'
+          #include <stdio.h>
+          static __thread int thread_local_fixture=9;
+          static int constructor_count=0;
+          __attribute__((constructor))
+          static void initial_program_state(void){constructor_count=thread_local_fixture;}
+          __attribute__((visibility("default")))
+          int JNI_OnLoad(void *vm,void *reserved) {
+            (void)vm;(void)reserved;
+            puts("JNI fixture should never execute");
+            return constructor_count;
+          }
+          __attribute__((visibility("default")))
+          void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit(void *env,void *cls,int w,int h){
+            (void)env;(void)cls;(void)w;(void)h;
+          }
+          __attribute__((visibility("default")))
+          void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeRender(void *env,void *cls){
+            (void)env;(void)cls;
+          }
+          EOF
+          cc -shared -fPIC -Wl,-z,relro -o /tmp/phase24_metadata.so /tmp/lenneth_phase24_mock.c
+          ./build-lenneth/lenneth-probe --startup24 /tmp/phase24_metadata.so /tmp/phase3_partner.so | tee lenneth-phase24-startup.txt
+          grep -q 'STARTUP_AUDIT=PASS startup_gate=BLOCKED' lenneth-phase24-startup.txt
+          grep -q 'lenneth-startup-gates.tsv' lenneth-phase24-startup.txt
+          grep -q 'DT_NEEDED' lenneth-startup-gates.tsv
+          grep -q 'init_array_entries=' lenneth-startup-gates.tsv
+          grep -q 'pt_tls=1' lenneth-startup-gates.tsv
+          grep -q 'JNI_OnLoad=1 nativeInit=1 nativeRender=1' lenneth-startup-gates.tsv
+          grep -q 'JNI_JAVA_VM.*BLOCKED' lenneth-startup-gates.tsv
+          grep -q 'COMMERCIAL_ENGINE.*BLOCKED' lenneth-startup-gates.tsv
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase24_metadata.so /tmp/phase3_partner.so | tee lenneth-phase24-batch.txt
+          grep -q 'STARTUP_AUDIT=PASS startup_gate=BLOCKED' lenneth-phase24-batch.txt
+          grep -q 'Phase24 read-only private Android startup metadata: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase24-batch.txt
+          if ./build-lenneth/lenneth-probe --startup24 /etc/os-release /tmp/phase3_partner.so; then
+            echo 'ERROR: non-ELF was accepted by startup scanner'
+            exit 1
+          fi
+          if ./build-lenneth/lenneth-probe --batch-headless /etc/os-release /tmp/phase3_partner.so; then
+            echo 'ERROR: malformed ELF accepted by previous linker'
+            exit 1
+          fi
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -894,13 +944,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase23-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase23-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase23-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase24-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase24-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase24-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase23
-          path: lenneth-r36s-multitest-phase23-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase24
+          path: lenneth-r36s-multitest-phase24-arm64.zip
           if-no-files-found: error
           retention-days: 14
