@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 27: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 28: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 27 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 28 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -35,7 +35,8 @@ echo "[lenneth suite] Phase23: native AArch64 nonlocal jump tests retained."
 echo "[lenneth suite] Phase24: read-only ELF startup audit retained."
 echo "[lenneth suite] Phase25: constructor and direct GLES1 fixed-function import inventory retained."
 echo "[lenneth suite] Phase26: native GLES1 library/export availability probe retained."
-echo "[lenneth suite] Phase27: actual native GLES1 1.x SDL/EGL context tested separately after batch; isolated synthetic JavaVM/JNIEnv fixture."
+echo "[lenneth suite] Phase27: isolated JNI ABI and SDL/EGL GLES1 tests retained."
+echo "[lenneth suite] Phase28: inspect actual EGL client version, 3 GL dispatch sources, and explicit EGL ES1 pbuffer fallback."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
@@ -78,7 +79,7 @@ fi
 if [ ! -d saves ]; then
     mkdir -m 700 -p saves 2>/dev/null || echo "[lenneth fd] cannot create app-private saves directory"
 fi
-rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv" "$root/lenneth-startup-gates.tsv" "$root/lenneth-phase25-startup-plan.tsv" "$root/lenneth-gles1-runtime26.tsv" "$root/lenneth-gles1-context27.tsv"
+rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv" "$root/lenneth-startup-gates.tsv" "$root/lenneth-phase25-startup-plan.tsv" "$root/lenneth-gles1-runtime26.tsv" "$root/lenneth-gles1-context27.tsv" "$root/lenneth-gles1-selection28.tsv"
 echo "[lenneth synthetic] Testing explicitly marked original synthetic ARM64 modules."
 synthetic_rc=9
 if [ -f mock/synthetic_guest.so ] && [ -f mock/synthetic_partner.so ]; then
@@ -146,20 +147,42 @@ else
     echo "Native GLES1 EGL 1.x context on device: UNAVAILABLE (exit=$ctx27_rc)" >> "$root/lenneth-suite-summary.txt"
 fi
 
-# Package only seven text reports. Never include libraries or game assets.
-if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ] && [ -f "$root/lenneth-phase25-startup-plan.tsv" ] && [ -f "$root/lenneth-gles1-runtime26.tsv" ] && [ -f "$root/lenneth-gles1-context27.tsv" ]; then
+# Phase28 runs after phase27 in a separate process, so if a graphics driver
+# refuses or crashes on explicit ES1 pbuffer creation, diagnostic reports stay
+# intact. This does not execute game code.
+echo "[lenneth phase28] Testing EGL version selected by SDL and an explicit ES1 pbuffer."
+if command -v timeout >/dev/null 2>&1; then
+    timeout 14 ./lenneth-probe --gles1-context28
+    ctx28_rc=$?
+else
+    ./lenneth-probe --gles1-context28
+    ctx28_rc=$?
+fi
+if [ ! -f "$root/lenneth-gles1-selection28.tsv" ]; then
+    printf 'provider\tgate\tstatus\tdetail\nnative\tFINAL_ES1_VALIDATION\tUNVERIFIED\tprobe_crashed_or_timed_out_%s\n' "$ctx28_rc" > "$root/lenneth-gles1-selection28.tsv"
+fi
+if grep -q 'FINAL_ES1_VALIDATION[[:space:]]*PASS' "$root/lenneth-gles1-selection28.tsv"; then
+    echo "[lenneth phase28] R36S_ES1_SELECTION=PASS"
+    echo "EGL ES1 context selection and dispatch: PASS" >> "$root/lenneth-suite-summary.txt"
+else
+    echo "[lenneth phase28] R36S_ES1_SELECTION=UNVERIFIED (nonfatal, exit=$ctx28_rc)"
+    echo "EGL ES1 context selection and dispatch: UNVERIFIED (exit=$ctx28_rc)" >> "$root/lenneth-suite-summary.txt"
+fi
+
+# Package only eight text reports. Never include libraries or game assets.
+if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ] && [ -f "$root/lenneth-phase25-startup-plan.tsv" ] && [ -f "$root/lenneth-gles1-runtime26.tsv" ] && [ -f "$root/lenneth-gles1-context27.tsv" ] && [ -f "$root/lenneth-gles1-selection28.tsv" ]; then
     if command -v zip >/dev/null 2>&1; then
         (cd "$root" && zip -q -j "lenneth-r36s-diagnostics.zip" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv" "lenneth-gles1-selection28.tsv") \
           || echo "[lenneth suite] zip report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.zip"
     elif command -v tar >/dev/null 2>&1; then
         (cd "$root" && tar -czf "lenneth-r36s-diagnostics.tar.gz" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv" "lenneth-gles1-selection28.tsv") \
           || echo "[lenneth suite] tar report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.tar.gz"
     fi
 fi
-echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv, lenneth-startup-gates.tsv, lenneth-phase25-startup-plan.tsv, lenneth-gles1-runtime26.tsv, lenneth-gles1-context27.tsv"
+echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv, lenneth-startup-gates.tsv, lenneth-phase25-startup-plan.tsv, lenneth-gles1-runtime26.tsv, lenneth-gles1-context27.tsv, lenneth-gles1-selection28.tsv"
 if declare -F pm_finish >/dev/null; then pm_finish; fi
 exit "$rc"
