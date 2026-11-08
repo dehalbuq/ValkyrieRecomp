@@ -1175,11 +1175,11 @@ jobs:
           ./build-lenneth/lenneth-probe --jni-demand31 \
             /tmp/phase31_mock.so /tmp/lenneth_phase30_partner.so | tee lenneth-phase31-inventory.txt
           grep -q 'JNI_DEMAND=PASS' lenneth-phase31-inventory.txt
-          grep -q 'game_exports=3' lenneth-phase31-inventory.txt
+          grep -q 'game_exports=3 cocos_exports=2 classes=2 methods=1' lenneth-phase31-inventory.txt
           grep -q 'JNI_BOOTSTRAP_EXPORTS.*JNI_OnLoad=1 nativeInit=1 nativeRender=1' lenneth-jni-demand31.tsv
-          grep -q 'JNI_CLASS_LITERAL.*FOUND.*org/cocos2dx/lib/Cocos2dxRenderer' lenneth-jni-demand31.tsv
-          grep -q 'JNI_CLASS_LITERAL.*FOUND.*org/cocos2dx/lib/Cocos2dxHelper' lenneth-jni-demand31.tsv
-          grep -q 'JNI_METHOD_LITERAL.*FOUND.*getCocos2dxWritablePath' lenneth-jni-demand31.tsv
+          grep -Eq 'JNI_CLASS_LITERAL[[:space:]]+FOUND[[:space:]]+org/cocos2dx/lib/Cocos2dxRenderer' lenneth-jni-demand31.tsv
+          grep -Eq 'JNI_CLASS_LITERAL[[:space:]]+FOUND[[:space:]]+org/cocos2dx/lib/Cocos2dxHelper' lenneth-jni-demand31.tsv
+          grep -Eq 'JNI_METHOD_LITERAL[[:space:]]+FOUND[[:space:]]+getCocos2dxWritablePath' lenneth-jni-demand31.tsv
           grep -q 'JNI_NATIVE_EXPORT.*Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit' lenneth-jni-demand31.tsv
           grep -q 'JNI_CLASSLOADER_AND_ART.*BLOCKED' lenneth-jni-demand31.tsv
           grep -q 'COMMERCIAL_ENGINE.*BLOCKED' lenneth-jni-demand31.tsv
