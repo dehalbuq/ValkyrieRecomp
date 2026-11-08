@@ -42,6 +42,8 @@ int lenneth_gles1_probe26(void);
 int lenneth_gles1_probe26_selftest(void);
 int lenneth_gles1_context27_probe(void);
 int lenneth_gles1_context27_selftest(void);
+int lenneth_gles1_context28_probe(void);
+int lenneth_gles1_context28_selftest(void);
 int lenneth_jni_synthetic27_selftest(void);
 int lenneth_bionic_stdio_legacy_selftest(void);
 int lenneth_phase22_jmp_abi_selftest(void);
@@ -357,6 +359,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     int startup25_self_rc=lenneth_startup25_selftest();
     int gles26_self_rc=lenneth_gles1_probe26_selftest();
     int gles27_self_rc=lenneth_gles1_context27_selftest();
+    int gles28_self_rc=lenneth_gles1_context28_selftest();
     int jni27_self_rc=lenneth_jni_synthetic27_selftest();
     /* One mapping and relocation pass for GLES/EGL + portable C +
        Android AAssetManager + logcat + JNI symbol report. */
@@ -367,10 +370,10 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     /* Host libraries only; resolves pointers but calls no GL function. */
     int gles26_rc=lenneth_gles1_probe26();
     int video_rc=display?video_probe(15):0;
-    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && phase17_rc==0 && locale18_rc==0 && phase19_rc==0 && phase20_rc==0 && phase21_rc==0 && phase22_stdio_rc==0 && phase22_jmp_rc==0 && phase23_rc==0 && startup24_self_rc==0 && startup24_rc==0 && startup25_rc==0 && startup25_self_rc==0 && gles26_rc==0 && gles26_self_rc==0 && gles27_self_rc==0 && jni27_self_rc==0 && link_rc==0 && video_rc==0);
+    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && phase17_rc==0 && locale18_rc==0 && phase19_rc==0 && phase20_rc==0 && phase21_rc==0 && phase22_stdio_rc==0 && phase22_jmp_rc==0 && phase23_rc==0 && startup24_self_rc==0 && startup24_rc==0 && startup25_rc==0 && startup25_self_rc==0 && gles26_rc==0 && gles26_self_rc==0 && gles27_self_rc==0 && gles28_self_rc==0 && jni27_self_rc==0 && link_rc==0 && video_rc==0);
     FILE *sum=fopen("lenneth-suite-summary.txt","w");
     if(sum) {
-        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 27)\n");
+        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 28)\n");
         fprintf(sum,"Assets fixture: %s\n",asset_rc==0?"PASS":"FAIL");
         fprintf(sum,"Android logging fixture: %s\n",log_rc==0?"PASS":"FAIL");
         fprintf(sum,"Bionic pthread/cond/TLS synthetic fixtures: %s\n",thread_rc==0?"PASS":"FAIL");
@@ -401,6 +404,8 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"Phase27 native GLES1 version classifier: %s\n",gles27_self_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase27 synthetic JavaVM/JNIEnv ABI and thread lifecycle: %s\n",jni27_self_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase27 real GLES1 context: STANDALONE_PROBE_AFTER_BATCH\n");
+        fprintf(sum,"Phase28 native SDL/EGL dispatch and pbuffer classifier fixture: %s\n",gles28_self_rc==0?"PASS":"FAIL");
+        fprintf(sum,"Phase28 EGL 1.x context selection: ISOLATED_DRIVER_PROBE_AFTER_BATCH\n");
         fprintf(sum,"Startup readiness: BLOCKED (JNI/constructors/guest OpenSL not invoked)\n");
         fprintf(sum,"SDL2 standalone PCM hardware fixture: %s\n",
                 !display?"SKIPPED_IN_HEADLESS_BATCH":(video_rc==0?"PASS":"FAIL"));
@@ -412,6 +417,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"Constructor and GLES1 transition inventory: lenneth-phase25-startup-plan.tsv\n");
         fprintf(sum,"Host OpenGL ES1 availability inventory: lenneth-gles1-runtime26.tsv\n");
         fprintf(sum,"Hardware OpenGL ES1 1.x context test: lenneth-gles1-context27.tsv\n");
+        fprintf(sum,"SDL/EGL context selection investigation: lenneth-gles1-selection28.tsv\n");
         fprintf(sum,"Game engine invoked: NO\n");
         fprintf(sum,"Overall diagnostic: %s\n",ok?"PASS":"FAIL");
         if(fclose(sum)!=0){
@@ -424,15 +430,19 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         ok=0;
     }
     printf("[lenneth suite] FINAL=%s asset=%d logging=%d threads=%d fortify=%d cxx=%d fd=%d unicode=%d data=%d dl=%d saveops=%d stdio=%d opensl=%d linking=%d "
-           "phase17=%d locale18=%d phase19=%d phase20=%d phase21=%d phase22_stdio=%d phase22_jmp=%d phase23=%d startup24=%d startup24_self=%d startup25=%d startup25_self=%d gles26=%d gles26_self=%d gles27_self=%d jni27_self=%d video_audio_input=%s summary=lenneth-suite-summary.txt "
+           "phase17=%d locale18=%d phase19=%d phase20=%d phase21=%d phase22_stdio=%d phase22_jmp=%d phase23=%d startup24=%d startup24_self=%d startup25=%d startup25_self=%d gles26=%d gles26_self=%d gles27_self=%d gles28_self=%d jni27_self=%d video_audio_input=%s summary=lenneth-suite-summary.txt "
            "blockers=lenneth-blockers.tsv engine_executed=NO\n",
-           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,fortify_rc,cxx_rc,fd_rc,unicode_rc,data_rc,dynamic_rc,saveops_rc,stdio_rc,opensl_rc,link_rc,phase17_rc,locale18_rc,phase19_rc,phase20_rc,phase21_rc,phase22_stdio_rc,phase22_jmp_rc,phase23_rc,startup24_rc,startup24_self_rc,startup25_rc,startup25_self_rc,gles26_rc,gles26_self_rc,gles27_self_rc,jni27_self_rc,
+           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,fortify_rc,cxx_rc,fd_rc,unicode_rc,data_rc,dynamic_rc,saveops_rc,stdio_rc,opensl_rc,link_rc,phase17_rc,locale18_rc,phase19_rc,phase20_rc,phase21_rc,phase22_stdio_rc,phase22_jmp_rc,phase23_rc,startup24_rc,startup24_self_rc,startup25_rc,startup25_self_rc,gles26_rc,gles26_self_rc,gles27_self_rc,gles28_self_rc,jni27_self_rc,
            !display?"CI_SKIP":(video_rc==0?"PASS":"FAIL"));
     return ok?0:12;
 }
 
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
+    if(argc==2 && strcmp(argv[1],"--gles1-context28")==0)
+        return lenneth_gles1_context28_probe();
+    if(argc==2 && strcmp(argv[1],"--gles1-context28-selftest")==0)
+        return lenneth_gles1_context28_selftest();
     if(argc==2 && strcmp(argv[1],"--gles1-context27")==0)
         return lenneth_gles1_context27_probe();
     if(argc==2 && strcmp(argv[1],"--gles1-context27-selftest")==0)
@@ -525,6 +535,6 @@ int main(int argc,char **argv) {
         }
         return video_probe(duration);
     }
-    fprintf(stderr,"Usage: %s --gles1-context27 | --gles1-context27-selftest | --jni27-selftest | --gles1-probe26 libMyGame.so libc++_shared.so | --gles1-probe26-selftest | --startup25 libMyGame.so libc++_shared.so | --startup25-selftest | --startup24 libMyGame.so libc++_shared.so | --startup24-selftest | --phase23-selftest | --phase22-selftest | --phase21-selftest | --phase20-selftest | --phase19-selftest | --locale18-selftest | --phase17-selftest | --pcm-selftest | --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
+    fprintf(stderr,"Usage: %s --gles1-context28 | --gles1-context28-selftest | --gles1-context27 | --gles1-context27-selftest | --jni27-selftest | --gles1-probe26 libMyGame.so libc++_shared.so | --gles1-probe26-selftest | --startup25 libMyGame.so libc++_shared.so | --startup25-selftest | --startup24 libMyGame.so libc++_shared.so | --startup24-selftest | --phase23-selftest | --phase22-selftest | --phase21-selftest | --phase20-selftest | --phase19-selftest | --locale18-selftest | --phase17-selftest | --pcm-selftest | --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
     return 2;
 }
