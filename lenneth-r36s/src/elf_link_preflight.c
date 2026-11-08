@@ -37,6 +37,7 @@
 #include "compat_phase20.h"
 #include "bionic_linker21.h"
 #include "compat_phase23.h"
+#include "jni_synthetic27.h"
 #include <sys/stat.h>
 
 enum { MAX_ELF_BYTES = 128*1024*1024, MAX_ELF_IMAGE = 256*1024*1024 };
@@ -1247,4 +1248,212 @@ int lenneth_batch_phase22_plan(const char *game_path,const char *cxx_path){
 }
 int lenneth_batch_phase23_plan(const char *game_path,const char *cxx_path){
     return lenneth_link_preflight_mode(game_path,cxx_path,19);
+}
+
+
+/*
+ * Phase30 executable synthetic constructor replay (NOT commercial).
+ *
+ * Phase11 executes only marker-verified ELF WITHOUT init arrays. Phase30
+ * adds a separate, stricter mode for two independently authored, tiny mock
+ * modules. Both carry a different, exact marker, no DT_NEEDED, no host
+ * imports, no TLS, no writable+executable segments, and exactly 1+2
+ * expected initializer slots. Reject everything else *before* mprotect
+ * and before any guest instruction is executed.
+ *
+ * Absolutely never call this from the real-game batch code.
+ */
+static int phase30_marked_mock(const Module *m){
+    static const char token[]="LENNETH_PHASE30_SYNTHETIC_LIFECYCLE_ONLY_2026";
+    uint64_t v=0;
+    if(m->size>65536 ||
+       !find_export(m,"lenneth_phase30_mock_marker",&v) ||
+       v<(uint64_t)(uintptr_t)m->image ||
+       v-(uint64_t)(uintptr_t)m->image>m->span ||
+       sizeof(token)>m->span-(size_t)(v-(uint64_t)(uintptr_t)m->image))
+        return 0;
+    return memcmp((const void *)(uintptr_t)v,token,sizeof(token))==0;
+}
+static int phase30_in_rx_segment(const Module *m,uint64_t address){
+    const Elf64_Ehdr *h=(const Elf64_Ehdr*)(const void*)m->raw;
+    const Elf64_Phdr *p=(const Elf64_Phdr*)(const void*)(m->raw+h->e_phoff);
+    const uint64_t base=(uint64_t)(uintptr_t)m->image;
+    if(address<base || address-base>=m->span)return 0;
+    const uint64_t vaddr=address-base+m->lo;
+    for(unsigned i=0;i<h->e_phnum;i++){
+        if(p[i].p_type!=PT_LOAD||!(p[i].p_flags&PF_X)||
+           (p[i].p_flags&PF_W)||vaddr<p[i].p_vaddr)continue;
+        if(vaddr-p[i].p_vaddr<p[i].p_memsz)return 1;
+    }
+    return 0;
+}
+static int phase30_validate_init_array(const Module *m,unsigned expected,
+                                        uint64_t entries[3]){
+    if(!phase30_marked_mock(m)||expected>3)return 0;
+    const Elf64_Ehdr *h=(const Elf64_Ehdr*)(const void*)m->raw;
+    const Elf64_Phdr *p=(const Elf64_Phdr*)(const void*)(m->raw+h->e_phoff);
+    uint64_t array_va=0,array_len=0;
+    unsigned dynamic_count=0, init_count=0,arrays=0;
+    for(unsigned i=0;i<h->e_phnum;i++){
+        if(p[i].p_type==PT_LOAD && (p[i].p_flags&PF_W) &&
+           (p[i].p_flags&PF_X))return 0;
+        if(p[i].p_type==PT_GNU_STACK && (p[i].p_flags&PF_X))return 0;
+        if(p[i].p_type==PT_TLS)return 0;
+        if(p[i].p_type!=PT_DYNAMIC)continue;
+        ++dynamic_count;
+        if(p[i].p_vaddr<m->lo || p[i].p_vaddr-m->lo>m->span ||
+           p[i].p_filesz>m->span-(size_t)(p[i].p_vaddr-m->lo) ||
+           p[i].p_filesz%sizeof(Elf64_Dyn))return 0;
+        const Elf64_Dyn *d=(const Elf64_Dyn*)(const void*)
+                           (m->image+(size_t)(p[i].p_vaddr-m->lo));
+        const size_t n=(size_t)p[i].p_filesz/sizeof(Elf64_Dyn);
+        int ended=0;
+        for(size_t j=0;j<n;j++){
+            if(d[j].d_tag==DT_NULL){ended=1;break;}
+            switch(d[j].d_tag){
+                case DT_NEEDED:
+                case DT_TEXTREL:
+                case DT_RELR:
+                    return 0;
+                case DT_PREINIT_ARRAYSZ:
+                case DT_INIT:
+                    if(d[j].d_un.d_val)return 0;
+                    break;
+                case DT_INIT_ARRAY:
+                    ++arrays;array_va=d[j].d_un.d_ptr;break;
+                case DT_INIT_ARRAYSZ:
+                    ++init_count;array_len=d[j].d_un.d_val;break;
+                default:break;
+            }
+        }
+        if(!ended)return 0;
+    }
+    if(dynamic_count!=1||arrays!=1||init_count!=1||
+       array_len!=(uint64_t)expected*8 || !array_va ||
+       array_va<m->lo || (array_va-m->lo)%8 ||
+       array_va-m->lo>m->span ||
+       array_len>m->span-(size_t)(array_va-m->lo))
+        return 0;
+    const unsigned char *src=m->image+(size_t)(array_va-m->lo);
+    for(unsigned i=0;i<expected;i++){
+        memcpy(&entries[i],src+i*8,8);
+        if(!phase30_in_rx_segment(m,entries[i]))return 0;
+    }
+    return 1;
+}
+static int phase30_find_executable(const Module *m,const char *name,
+                                    uint64_t *value){
+    return find_export(m,name,value) &&
+           phase30_in_rx_segment(m,*value);
+}
+static int phase30_call_constructors(const uint64_t *entries,unsigned n){
+    for(unsigned i=0;i<n;i++){
+        void (*fn)(void)=NULL;
+        void *addr=(void*)(uintptr_t)entries[i];
+        if(sizeof(fn)!=sizeof(addr))return 0;
+        memcpy(&fn,&addr,sizeof(fn));
+        if(!fn)return 0;
+        fn(); /* ONLY independently authored and marker-verified fixture */
+    }
+    return 1;
+}
+int lenneth_synthetic_lifecycle30(const char *mock_game_path,
+                                  const char *mock_partner_path){
+    Module game={0},partner={0};
+    LinkStats gs={0},ps={0};
+    uint64_t ctor_game[3]={0},ctor_partner[3]={0};
+    uint64_t onload_addr=0,init_addr=0,render_addr=0,stage_addr=0;
+    int rc=30;
+    printf("[lenneth phase30] SYNTHETIC_LIFECYCLE=BEGIN "
+           "private_guest_execution=FORBIDDEN\n");
+    if(!load_file(&partner,"phase30_mock_partner",mock_partner_path) ||
+       !load_file(&game,"phase30_mock_game",mock_game_path))
+        goto end;
+    /* Verify BOTH synthetic tokens before applying any host or module
+     * relocation, and require the tiny fixture size cap. */
+    if(!phase30_marked_mock(&partner)||!phase30_marked_mock(&game)){
+        printf("[lenneth phase30] REFUSED: not the explicitly marked "
+               "Phase30 mock module pair\n");
+        goto end;
+    }
+    if(!relocate_table(&partner,&game,partner.rela,partner.rela_count,&ps) ||
+       !relocate_table(&partner,&game,partner.jmp,partner.jmp_count,&ps) ||
+       !relocate_table(&game,&partner,game.rela,game.rela_count,&gs) ||
+       !relocate_table(&game,&partner,game.jmp,game.jmp_count,&gs) ||
+       gs.unresolved||ps.unresolved||gs.unsupported||ps.unsupported ||
+       gs.relocations!=gs.relative+gs.internal+gs.partner ||
+       ps.relocations!=ps.relative+ps.internal+ps.partner ||
+       !phase30_validate_init_array(&partner,1,ctor_partner) ||
+       !phase30_validate_init_array(&game,2,ctor_game)){
+        printf("[lenneth phase30] REFUSED: host imports, mismatched "
+               "constructors, invalid mappings, or incomplete relocations\n");
+        goto end;
+    }
+    if(!phase30_find_executable(&game,"JNI_OnLoad",&onload_addr) ||
+       !phase30_find_executable(&game,
+         "Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit",&init_addr) ||
+       !phase30_find_executable(&game,
+         "Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeRender",&render_addr) ||
+       !phase30_find_executable(&game,"lenneth_phase30_get_stage",&stage_addr)){
+        printf("[lenneth phase30] REFUSED: synthetic JNI export gates\n");
+        goto end;
+    }
+    __builtin___clear_cache((char*)game.image,(char*)game.image+game.span);
+    __builtin___clear_cache((char*)partner.image,(char*)partner.image+partner.span);
+    if(!synthetic_protect(&partner)||!synthetic_protect(&game)){
+        printf("[lenneth phase30] REFUSED: unsafe W^X memory protections\n");
+        goto end;
+    }
+    int (*read_stage)(void)=NULL;
+    Lenneth30MockOnload onload=NULL;
+    Lenneth30MockInit init=NULL;
+    Lenneth30MockRender render=NULL;
+    void *addr=(void*)(uintptr_t)stage_addr;
+    if(sizeof(read_stage)!=sizeof(addr) || sizeof(onload)!=sizeof(addr) ||
+       sizeof(init)!=sizeof(addr) || sizeof(render)!=sizeof(addr))goto end;
+    memcpy(&read_stage,&addr,sizeof(addr));
+    addr=(void*)(uintptr_t)onload_addr;memcpy(&onload,&addr,sizeof(addr));
+    addr=(void*)(uintptr_t)init_addr;memcpy(&init,&addr,sizeof(addr));
+    addr=(void*)(uintptr_t)render_addr;memcpy(&render,&addr,sizeof(addr));
+    if(!phase30_call_constructors(ctor_partner,1) ||
+       !phase30_call_constructors(ctor_game,2)){
+        printf("[lenneth phase30] REFUSED: synthetic constructor call failed\n");
+        goto end;
+    }
+    int constructors_stage=read_stage();
+    int jni_rc=constructors_stage==13?
+        lenneth_jni27_replay_mock(onload,init,render):30;
+    int finished_stage=read_stage();
+    FILE *report=fopen("lenneth-phase30-lifecycle.tsv","w");
+    if(!report){
+        printf("[lenneth phase30] ERROR: report could not be opened\n");
+        goto end;
+    }
+    fputs("component\tgate\tstatus\tdetail\n",report);
+    fputs("loader\tSYNTHETIC_PAIR\tPASS\tmarker_checked_both_modules_no_DT_NEEDED\n",report);
+    fputs("loader\tCTOR_RELOCATIONS\tPASS\tone_partner_and_two_game_in_rx_segments\n",report);
+    fputs("loader\tW_X\tPASS\tcode_RX_data_RW_no_WX\n",report);
+    fprintf(report,"startup\tCONSTRUCTOR_ORDER\t%s\tstage=%d_expected=13\n",
+            constructors_stage==13?"PASS":"FAIL",constructors_stage);
+    fprintf(report,"startup\tJNI_ONLOAD_INIT_RENDER\t%s\tstage=%d_expected=16\n",
+            !jni_rc&&finished_stage==16?"PASS":"FAIL",finished_stage);
+    fputs("real_game\tCOMMERCIAL_CONSTRUCTORS\tBLOCKED\tnot_called\n",report);
+    fputs("real_game\tCOMMERCIAL_JNI_ONLOAD\tBLOCKED\tnot_called\n",report);
+    fputs("real_game\tANDROID_ASSET_AND_OPENSL\tBLOCKED\tnot_integrated\n",report);
+    int write_error=ferror(report);
+    if(fclose(report)!=0)write_error=1;
+    if(constructors_stage==13&&!jni_rc&&finished_stage==16&&!write_error){
+        printf("[lenneth phase30] SYNTHETIC_LIFECYCLE=PASS "
+               "ctor_order=DEPENDENCY_THEN_GAME stage=13 JNI_OnLoad=1 "
+               "nativeInit=1 nativeRender=1 final_stage=16 "
+               "W_X=ENFORCED engine_executed=NO "
+               "report=lenneth-phase30-lifecycle.tsv\n");
+        rc=0;
+    }else
+        printf("[lenneth phase30] SYNTHETIC_LIFECYCLE=FAIL "
+               "ctor_stage=%d jni_rc=%d final_stage=%d engine_executed=NO\n",
+               constructors_stage,jni_rc,finished_stage);
+end:
+    unload(&game);unload(&partner);
+    return rc;
 }
