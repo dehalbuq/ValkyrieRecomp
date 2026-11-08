@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase26 GLES1 system provider and optional guest dlopen audit
+name: Lenneth Android R36S - ARM64 phase27 native GLES1 context and JNI Invocation ABI fixtures
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase26-staging
+      - port/lenneth-phase27-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -1019,6 +1019,31 @@ jobs:
             exit 1
           fi
 
+      - name: Phase27 JNI Invocation ABI and isolated GLES1 context tests
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --jni27-selftest | tee lenneth-phase27-jni.txt
+          grep -q 'JNI_VM_SELFTEST=PASS' lenneth-phase27-jni.txt
+          grep -q 'synthetic_JNI_OnLoad=PASS' lenneth-phase27-jni.txt
+          grep -q 'thread_attach_detach=PASS' lenneth-phase27-jni.txt
+          grep -q 'FindClass=DENIED' lenneth-phase27-jni.txt
+          grep -q 'commercial_JNI_OnLoad=NOT_CALLED' lenneth-phase27-jni.txt
+          ./build-lenneth/lenneth-probe --gles1-context27-selftest | tee lenneth-phase27-gles1-classifier.txt
+          grep -q 'GLES1_CONTEXT_SELFTEST=PASS' lenneth-phase27-gles1-classifier.txt
+          grep -q 'native_ES2_not_ES1=PASS' lenneth-phase27-gles1-classifier.txt
+          SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+            ./build-lenneth/lenneth-probe --gles1-context27 | tee lenneth-phase27-headless.txt
+          grep -q 'GLES1_CONTEXT=UNAVAILABLE' lenneth-phase27-headless.txt
+          grep -q 'EGL_ES1_CONTEXT.*UNAVAILABLE' lenneth-gles1-context27.tsv
+          grep -q 'COMMERCIAL_ENGINE.*BLOCKED' lenneth-gles1-context27.tsv
+          ./build-lenneth/lenneth-probe --batch-headless /tmp/phase25_game.so /tmp/phase3_partner.so | tee lenneth-phase27-batch.txt
+          grep -q 'JNI_VM_SELFTEST=PASS' lenneth-phase27-batch.txt
+          grep -q 'GLES1_CONTEXT_SELFTEST=PASS' lenneth-phase27-batch.txt
+          grep -q 'Phase27 synthetic JavaVM/JNIEnv ABI and thread lifecycle: PASS' lenneth-suite-summary.txt
+          grep -q 'Phase27 native GLES1 version classifier: PASS' lenneth-suite-summary.txt
+          grep -q 'FINAL=PASS' lenneth-phase27-batch.txt
+          grep -q 'engine_executed=NO' lenneth-phase27-batch.txt
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -1033,13 +1058,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase26-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase26-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase26-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase27-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase27-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase27-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase26
-          path: lenneth-r36s-multitest-phase26-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase27
+          path: lenneth-r36s-multitest-phase27-arm64.zip
           if-no-files-found: error
           retention-days: 14
