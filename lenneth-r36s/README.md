@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — phases 1–15, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
+**Experimental bootstrap — through phase 32, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -1142,3 +1142,20 @@ Phase30 passed on a physical R36S: real AArch64 **synthetic** constructors execu
 Before trying to emulate Android ART, Phase31 examines **only ELF metadata and predefined, allowlisted Java class/method literals** from the user's own on-device \`libMyGame.so\` and \`libc++_shared.so\`. It reports all defined \`Java_*\` JNI export names (bounded to 128 entries), core JNI_OnLoad/nativeInit/nativeRender presence, and which of a short fixed list of Cocos2dx, Android Context/AssetManager and ClassLoader string literals occur within file-backed ELF load segments (read-only inspection, including RX segments that combine code and constants). It also counts imported Bionic setjmp/longjmp and \`__sF\`-family names. The exact static method names not found are reported as \`NOT_FOUND\` — *absence of a literal does not prove the application has no dynamic JNI requirements*. Only allowlisted strings and public dynamic symbol names are included in the eleventh text-only report, \`lenneth-jni-demand31.tsv\`; no binaries, unknown strings, assets or proprietary code are copied to diagnostics or GitHub.
 
 Historical AOSP Android arm64 Bionic \`machine/setjmp.h\` confirms a **256-byte** buffer with core state at byte 8 and floating state at byte 112. Phase31 checks these offsets in the independent host fixture, but **does not assert that the exact commercial Android library version uses this historical private ABI**, which changed in later releases. JavaVM/ClassLoader/ART, asset-context and OpenSL remain BLOCKED. Phase31 is a *pre-implementation inventory*, not a playable game or a real Android runtime.
+
+
+## Phase32: bounded JNI contract fixture (commercial execution blocked)
+
+The phase31 diagnostic on the R36S found 30 JNI exports, including 29 Java
+exports, 24 Cocos exports, nine allowlisted class literals, and eight method
+literals in libMyGame.so. Phase32 uses only independently authored fixtures:
+- Validates selected JNI function-pointer table offsets (ABI slots 4–228).
+- Exercises allowlisted FindClass, a *fixture-only* static method, UTF-8
+  strings, mock reference tokens and pending-exception behavior.
+- Denies unknown classes/methods and RegisterNatives. No commercial JNI,
+  Android ART, actual Java objects, or guest engine are executed.
+- Writes lenneth-jni-contract32.tsv alongside existing reports.
+
+The sample method name/signature and string path **are not evidence of the
+real Android game's signatures or APIs**. This is not yet a working JVM,
+Cocos2d Android service layer or playable port.
