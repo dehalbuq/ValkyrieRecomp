@@ -127,14 +127,14 @@ static void name_safe(char *out,size_t cap,const char *s,size_t n){
     }
     out[i]=0;
 }
-/* Only exact strings specified in this source are tested. Return presence
- * only, never dump arbitrary Java constants or proprietary rodata. */
+/* Only exact strings specified in this source are tested across file-backed
+ * PT_LOAD segments (including a toolchain's RX combined text+rodata segment).
+ * Never dump unknown Java constants, binary bytes or proprietary code. */
 static int has_literal(const E31 *e,const char *literal){
     size_t n=strlen(literal)+1;
     for(size_t i=0;i<e->eh->e_phnum;i++){
         const Elf64_Phdr *p=&e->ph[i];
-        if(p->p_type!=PT_LOAD || (p->p_flags&PF_X) ||
-           p->p_filesz<n ||
+        if(p->p_type!=PT_LOAD || p->p_filesz<n ||
            !bounded((size_t)p->p_offset,(size_t)p->p_filesz,e->size))
             continue;
         if(memmem(e->data+(size_t)p->p_offset,(size_t)p->p_filesz,literal,n))
