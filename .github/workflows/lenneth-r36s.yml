@@ -1,11 +1,11 @@
-name: Lenneth Android R36S - ARM64 phase29 native GLES1 fixed function raster readback
+name: Lenneth Android R36S - ARM64 phase30 verified synthetic native constructor and JNI lifecycle replay
 
 on:
   workflow_dispatch:
   push:
     branches:
       - port/lenneth-android-r36s
-      - port/lenneth-phase29-staging
+      - port/lenneth-phase30-staging
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -1088,6 +1088,63 @@ jobs:
             exit 1
           fi
 
+      - name: Phase30 execute only public marker-verified AArch64 constructor and JNI ELF pair
+        run: |
+          set -euo pipefail
+          cc -shared -nostdlib -fPIC -O2 -fno-stack-protector \
+            -Wl,-z,relro \
+            -o /tmp/lenneth_phase30_partner.so lenneth-r36s/tests/phase30_partner.c
+          cc -shared -nostdlib -fPIC -O2 -fno-stack-protector \
+            -Wl,-z,relro \
+            -o /tmp/lenneth_phase30_game.so lenneth-r36s/tests/phase30_game.c
+          readelf -h /tmp/lenneth_phase30_game.so | grep -q 'Machine:.*AArch64'
+          readelf -h /tmp/lenneth_phase30_partner.so | grep -q 'Machine:.*AArch64'
+          readelf -d /tmp/lenneth_phase30_game.so | grep -q '(INIT_ARRAYSZ)'
+          readelf -d /tmp/lenneth_phase30_partner.so | grep -q '(INIT_ARRAYSZ)'
+          if readelf -d /tmp/lenneth_phase30_game.so | grep -q '(NEEDED)'; then
+            echo 'ERROR: Phase30 game mock has external ELF dependencies'
+            exit 1
+          fi
+          if readelf -d /tmp/lenneth_phase30_partner.so | grep -q '(NEEDED)'; then
+            echo 'ERROR: Phase30 partner mock has external ELF dependencies'
+            exit 1
+          fi
+          ./build-lenneth/lenneth-probe --execute-lifecycle30 \
+            /tmp/lenneth_phase30_game.so /tmp/lenneth_phase30_partner.so \
+            | tee lenneth-phase30-execution.txt
+          grep -q 'SYNTHETIC_LIFECYCLE=PASS' lenneth-phase30-execution.txt
+          grep -q 'stage=13' lenneth-phase30-execution.txt
+          grep -q 'final_stage=16' lenneth-phase30-execution.txt
+          grep -q 'W_X=ENFORCED' lenneth-phase30-execution.txt
+          grep -q 'CONSTRUCTOR_ORDER.*PASS' lenneth-phase30-lifecycle.tsv
+          grep -q 'JNI_ONLOAD_INIT_RENDER.*PASS' lenneth-phase30-lifecycle.tsv
+          grep -q 'COMMERCIAL_CONSTRUCTORS.*BLOCKED' lenneth-phase30-lifecycle.tsv
+          grep -q 'COMMERCIAL_JNI_ONLOAD.*BLOCKED' lenneth-phase30-lifecycle.tsv
+
+          # Markers are necessary for executable access, but old Phase11 mocks
+          # and arbitrary/real-ELF-like fixtures must NEVER be eligible.
+          if ./build-lenneth/lenneth-probe --execute-lifecycle30 \
+               /tmp/lenneth_mock_guest.so /tmp/lenneth_mock_partner.so; then
+            echo 'ERROR: Phase11 mock accepted as a Phase30 executable fixture'
+            exit 1
+          fi
+          if ./build-lenneth/lenneth-probe --execute-lifecycle30 \
+               /tmp/phase25_game.so /tmp/phase3_partner.so; then
+            echo 'ERROR: unmarked private-ELF-like fixture accepted'
+            exit 1
+          fi
+          if ./build-lenneth/lenneth-probe --execute-lifecycle30 \
+               /tmp/lenneth_phase30_game.so /tmp/lenneth_mock_partner.so; then
+            echo 'ERROR: mismatched synthetic fixture pair accepted'
+            exit 1
+          fi
+          ./build-lenneth/lenneth-probe --batch-headless \
+              /tmp/phase25_game.so /tmp/phase3_partner.so \
+              | tee lenneth-phase30-batch.txt
+          grep -q 'FINAL=PASS' lenneth-phase30-batch.txt
+          grep -q 'Phase30 guarded native constructor and JNI lifecycle: SYNTHETIC_ELF_AFTER_BATCH' lenneth-suite-summary.txt
+          grep -q 'Game engine invoked: NO' lenneth-suite-summary.txt
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -1095,6 +1152,8 @@ jobs:
           install -m755 build-lenneth/lenneth-probe package/ports/lenneth-r36s/lenneth-probe
           install -m644 /tmp/lenneth_mock_guest.so package/ports/lenneth-r36s/mock/synthetic_guest.so
           install -m644 /tmp/lenneth_mock_partner.so package/ports/lenneth-r36s/mock/synthetic_partner.so
+          install -m644 /tmp/lenneth_phase30_game.so package/ports/lenneth-r36s/mock/startup30_game.so
+          install -m644 /tmp/lenneth_phase30_partner.so package/ports/lenneth-r36s/mock/startup30_partner.so
           install -m755 lenneth-r36s/PortMaster/lenneth-test-launcher.sh package/ports/lenneth-r36s/launch.sh
           install -m755 "lenneth-r36s/PortMaster/Lenneth Android R36S Test.sh" "package/ports/Lenneth Android R36S Test.sh"
           install -m644 lenneth-r36s/README.md package/ports/lenneth-r36s/README.md
@@ -1102,13 +1161,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase29-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase29-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase29-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase30-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase30-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase30-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase29
-          path: lenneth-r36s-multitest-phase29-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase30
+          path: lenneth-r36s-multitest-phase30-arm64.zip
           if-no-files-found: error
           retention-days: 14
