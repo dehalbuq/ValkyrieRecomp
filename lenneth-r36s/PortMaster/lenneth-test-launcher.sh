@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lenneth R36S phase 24: ONE combined diagnostic run, compact reports.
+# Lenneth R36S phase 25: ONE combined diagnostic run, compact reports.
 # No game execution. Proprietary .so and data are NEVER packaged or uploaded.
 set +u
 root="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
@@ -12,7 +12,7 @@ if ! ( : >> "$log" ) 2>/dev/null; then log="/tmp/lenneth-r36s.log"; fi
 if [ -s "$log" ]; then cp -f "$log" "$root/lenneth-r36s.previous.log" 2>/dev/null || true; fi
 exec > "$log" 2>&1
 
-echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 24 $(date -Iseconds 2>/dev/null || date) ==="
+echo "=== Lenneth R36S BATCH DIAGNOSTIC PHASE 25 $(date -Iseconds 2>/dev/null || date) ==="
 echo "Kernel: $(uname -a)"
 echo "glibc: $(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
 echo "[lenneth suite] Single run: private ARM64 ELF + GLES2 + portable libc + AAsset + Android log + JNI inventory + native video/audio/gamepad."
@@ -32,7 +32,8 @@ echo "[lenneth suite] Phase20: sandboxed fdopen, priority and syscall regression
 echo "[lenneth suite] Phase21: guest-only ELF program headers and shell denial retained."
 echo "[lenneth suite] Phase22: Bionic legacy __sF[3] data and historical jump ABI audit retained."
 echo "[lenneth suite] Phase23: native AArch64 nonlocal jump tests retained."
-echo "[lenneth suite] Phase24: read-only startup dependency/constructor/TLS/JNI safety gate audit."
+echo "[lenneth suite] Phase24: read-only ELF startup audit retained."
+echo "[lenneth suite] Phase25: read-only native constructor relocation/ordering and OpenGL ES1 fixed-function imports audit."
 
 for pm in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
     "$HOME/.local/share/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster; do
@@ -75,7 +76,7 @@ fi
 if [ ! -d saves ]; then
     mkdir -m 700 -p saves 2>/dev/null || echo "[lenneth fd] cannot create app-private saves directory"
 fi
-rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv" "$root/lenneth-startup-gates.tsv"
+rm -f "$root/lenneth-suite-summary.txt" "$root/lenneth-blockers.tsv" "$root/lenneth-startup-gates.tsv" "$root/lenneth-phase25-startup-plan.tsv"
 echo "[lenneth synthetic] Testing explicitly marked original synthetic ARM64 modules."
 synthetic_rc=9
 if [ -f mock/synthetic_guest.so ] && [ -f mock/synthetic_partner.so ]; then
@@ -121,20 +122,20 @@ if [ -f "$root/lenneth-suite-summary.txt" ]; then
 fi
 if [ "$synthetic_rc" -ne 0 ] && [ "$rc" -eq 0 ]; then rc=13; fi
 
-# Package only four text reports. Never include libraries or game assets.
-if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ]; then
+# Package only five text reports. Never include libraries or game assets.
+if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ] && [ -f "$root/lenneth-phase25-startup-plan.tsv" ]; then
     if command -v zip >/dev/null 2>&1; then
         (cd "$root" && zip -q -j "lenneth-r36s-diagnostics.zip" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv") \
           || echo "[lenneth suite] zip report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.zip"
     elif command -v tar >/dev/null 2>&1; then
         (cd "$root" && tar -czf "lenneth-r36s-diagnostics.tar.gz" \
-          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv") \
+          "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv") \
           || echo "[lenneth suite] tar report packaging failed"
         echo "[lenneth suite] Reports: lenneth-r36s-diagnostics.tar.gz"
     fi
 fi
-echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv, lenneth-startup-gates.tsv"
+echo "[lenneth suite] Exit code=$rc. Text results: lenneth-r36s.log, lenneth-suite-summary.txt, lenneth-blockers.tsv, lenneth-startup-gates.tsv, lenneth-phase25-startup-plan.tsv"
 if declare -F pm_finish >/dev/null; then pm_finish; fi
 exit "$rc"
