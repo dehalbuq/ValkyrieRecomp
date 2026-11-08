@@ -64,6 +64,7 @@ int lenneth_unicode_provider_selftest(void);
 int lenneth_bionic_data_selftest(void);
 int lenneth_cxx_runtime_selftest(void);
 int lenneth_synthetic_execute(const char *guest_path,const char *partner_path);
+int lenneth_synthetic_lifecycle30(const char *mock_game,const char *mock_partner);
 int lenneth_android_log_selftest(void);
 int lenneth_asset_selftest(const char *root,const char *relative_path);
 
@@ -376,7 +377,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && phase17_rc==0 && locale18_rc==0 && phase19_rc==0 && phase20_rc==0 && phase21_rc==0 && phase22_stdio_rc==0 && phase22_jmp_rc==0 && phase23_rc==0 && startup24_self_rc==0 && startup24_rc==0 && startup25_rc==0 && startup25_self_rc==0 && gles26_rc==0 && gles26_self_rc==0 && gles27_self_rc==0 && gles28_self_rc==0 && gles29_self_rc==0 && jni27_self_rc==0 && link_rc==0 && video_rc==0);
     FILE *sum=fopen("lenneth-suite-summary.txt","w");
     if(sum) {
-        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 29)\n");
+        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 30)\n");
         fprintf(sum,"Assets fixture: %s\n",asset_rc==0?"PASS":"FAIL");
         fprintf(sum,"Android logging fixture: %s\n",log_rc==0?"PASS":"FAIL");
         fprintf(sum,"Bionic pthread/cond/TLS synthetic fixtures: %s\n",thread_rc==0?"PASS":"FAIL");
@@ -410,6 +411,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"Phase28 native SDL/EGL dispatch and pbuffer classifier fixture: %s\n",gles28_self_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase29 native ES1 1.1 raster/readback classifier: %s\n",gles29_self_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase29 native ES1 raster: STANDALONE_DRIVER_PROBE_AFTER_BATCH\n");
+        fprintf(sum,"Phase30 guarded native constructor and JNI lifecycle: SYNTHETIC_ELF_AFTER_BATCH\n");
         fprintf(sum,"Phase28 EGL 1.x context selection: ISOLATED_DRIVER_PROBE_AFTER_BATCH\n");
         fprintf(sum,"Startup readiness: BLOCKED (JNI/constructors/guest OpenSL not invoked)\n");
         fprintf(sum,"SDL2 standalone PCM hardware fixture: %s\n",
@@ -424,6 +426,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"Hardware OpenGL ES1 1.x context test: lenneth-gles1-context27.tsv\n");
         fprintf(sum,"SDL/EGL context selection investigation: lenneth-gles1-selection28.tsv\n");
         fprintf(sum,"ES1 1.1 fixed-function pixel raster proof: lenneth-gles1-raster29.tsv\n");
+        fprintf(sum,"Synthetic constructor and JNI event replay: lenneth-phase30-lifecycle.tsv\n");
         fprintf(sum,"Game engine invoked: NO\n");
         fprintf(sum,"Overall diagnostic: %s\n",ok?"PASS":"FAIL");
         if(fclose(sum)!=0){
@@ -509,6 +512,8 @@ int main(int argc,char **argv) {
         return lenneth_bionic_data_selftest();
     if(argc==2 && strcmp(argv[1],"--cxx-selftest")==0)
         return lenneth_cxx_runtime_selftest();
+    if(argc==4 && strcmp(argv[1],"--execute-lifecycle30")==0)
+        return lenneth_synthetic_lifecycle30(argv[2],argv[3]);
     if(argc==4 && strcmp(argv[1],"--execute-synthetic")==0)
         return lenneth_synthetic_execute(argv[2],argv[3]);
     if(argc==2 && strcmp(argv[1],"--fortify-selftest")==0)
@@ -545,6 +550,6 @@ int main(int argc,char **argv) {
         }
         return video_probe(duration);
     }
-    fprintf(stderr,"Usage: %s --gles1-render29 | --gles1-render29-selftest | --gles1-context28 | --gles1-context28-selftest | --gles1-context27 | --gles1-context27-selftest | --jni27-selftest | --gles1-probe26 libMyGame.so libc++_shared.so | --gles1-probe26-selftest | --startup25 libMyGame.so libc++_shared.so | --startup25-selftest | --startup24 libMyGame.so libc++_shared.so | --startup24-selftest | --phase23-selftest | --phase22-selftest | --phase21-selftest | --phase20-selftest | --phase19-selftest | --locale18-selftest | --phase17-selftest | --pcm-selftest | --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
+    fprintf(stderr,"Usage: %s --execute-lifecycle30 mock_game.so mock_partner.so | --gles1-render29 | --gles1-render29-selftest | --gles1-context28 | --gles1-context28-selftest | --gles1-context27 | --gles1-context27-selftest | --jni27-selftest | --gles1-probe26 libMyGame.so libc++_shared.so | --gles1-probe26-selftest | --startup25 libMyGame.so libc++_shared.so | --startup25-selftest | --startup24 libMyGame.so libc++_shared.so | --startup24-selftest | --phase23-selftest | --phase22-selftest | --phase21-selftest | --phase20-selftest | --phase19-selftest | --locale18-selftest | --phase17-selftest | --pcm-selftest | --opensl-selftest | --stdio-selftest | --ndk-dl-selftest | --saveops-selftest | --fd-selftest | --unicode-selftest | --bionic-data-selftest | --execute-synthetic mock.so partner.so | --cxx-selftest | --fortify-selftest | --threads-selftest | --batch libMyGame.so libc++_shared.so | --batch-headless libMyGame.so libc++_shared.so | --inspect libMyGame.so | --preflight libMyGame.so | --link-plan libMyGame.so libc++_shared.so | --host-plan libMyGame.so libc++_shared.so | --portable-plan libMyGame.so libc++_shared.so | --asset-plan libMyGame.so libc++_shared.so | --logging-plan libMyGame.so libc++_shared.so | --logging-selftest | --asset-selftest dir file | --video [--seconds 20]\n",argv[0]);
     return 2;
 }
