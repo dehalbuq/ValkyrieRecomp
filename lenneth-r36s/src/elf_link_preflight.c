@@ -1266,7 +1266,11 @@ int lenneth_batch_phase23_plan(const char *game_path,const char *cxx_path){
 static int phase30_marked_mock(const Module *m){
     static const char token[]="LENNETH_PHASE30_SYNTHETIC_LIFECYCLE_ONLY_2026";
     uint64_t v=0;
-    if(m->size>65536 ||
+    /* Some AArch64 GNU linkers use a 64 KiB PT_LOAD alignment, making
+     * even a 2-function, -nostdlib synthetic ELF slightly over 64 KiB.
+     * 128 KiB is still a strict, tiny-fixture-only limit versus the
+     * multi-megabyte commercial library. */
+    if(m->size>128*1024 ||
        !find_export(m,"lenneth_phase30_mock_marker",&v) ||
        v<(uint64_t)(uintptr_t)m->image ||
        v-(uint64_t)(uintptr_t)m->image>m->span ||
