@@ -31,9 +31,9 @@ static void *open_legacy(void){
     return h;
 }
 static int is_es1_version(const char *v){
-    return v && (!strncmp(v,"OpenGL ES-CM 1.",14)||
+    return v && (!strncmp(v,"OpenGL ES-CM 1.",15)||
                  !strncmp(v,"OpenGL ES 1.",12)||
-                 !strncmp(v,"OpenGL ES-CL 1.",14));
+                 !strncmp(v,"OpenGL ES-CL 1.",15));
 }
 static void sanitized(char *out,size_t cap,const char *input){
     size_t i=0;
@@ -124,7 +124,7 @@ int lenneth_gles1_context27_probe(void){
     api_ok=1;
     /* Exercise only the synthetic ES1 fixed-function state on a valid ES1
      * context, with no guest rendering or commercial assets. */
-    while(gl_error()!=NO_ERROR_ENUM){}
+    for(int i=0;i<8 && gl_error()!=NO_ERROR_ENUM;i++){}
     gl_matrix(MODELVIEW_ENUM);
     gl_identity();
     gl_color(0.0f,0.0f,0.0f,1.0f);
@@ -152,7 +152,7 @@ end:
     if(context)SDL_GL_DeleteContext(context);
     if(window)SDL_DestroyWindow(window);
     if(sdl_started)SDL_Quit();
-    dlclose(legacy);
+    if(legacy)dlclose(legacy);
     alarm(0);
     printf("[lenneth phase27] GLES1_CONTEXT=%s reason=%s "
            "created=%d es1_version=%d gl_error=%u version=%s "
