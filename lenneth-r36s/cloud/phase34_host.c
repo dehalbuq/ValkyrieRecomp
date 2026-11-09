@@ -156,12 +156,12 @@ typedef struct {int ok;} ThreadResult;
 static void *thread_check(void *p) {
     ThreadResult *r=p;
     void *env=(void *)1;
-    int detached_ok=(*(&vm_val))->GetEnv(&vm_val,&env,JNI_VERSION_1_6)==JNI_EDETACHED
+    int detached_ok=vm_val->GetEnv(&vm_val,&env,JNI_VERSION_1_6)==JNI_EDETACHED
                      && env==NULL;
-    int attached_ok=(*(&vm_val))->AttachCurrentThread(&vm_val,&env,NULL)==JNI_OK
+    int attached_ok=vm_val->AttachCurrentThread(&vm_val,&env,NULL)==JNI_OK
                     && env==&env_val;
-    int version_ok=(*(&vm_val))->GetEnv(&vm_val,&env,0x00120000)==JNI_EVERSION;
-    int detach_ok=(*(&vm_val))->DetachCurrentThread(&vm_val)==JNI_OK;
+    int version_ok=vm_val->GetEnv(&vm_val,&env,0x00120000)==JNI_EVERSION;
+    int detach_ok=vm_val->DetachCurrentThread(&vm_val)==JNI_OK;
     r->ok=detached_ok&&attached_ok&&version_ok&&detach_ok;
     return NULL;
 }
@@ -197,25 +197,25 @@ int main(void) {
         render(&env_val,(jobject)&renderer);
         ok=state()==11;
     }
-    jobject global=(*env_val)->NewGlobalRef(&env_val,(jobject)&path_obj);
+    jobject global=env_val->NewGlobalRef(&env_val,(jobject)&path_obj);
     ok=ok && global==(jobject)&path_obj && globals==1;
-    (*env_val)->DeleteGlobalRef(&env_val,global);
+    env_val->DeleteGlobalRef(&env_val,global);
     ok=ok && globals==0;
 
-    jclass bad=(*env_val)->FindClass(&env_val,"android/permission/Unknown");
-    deny_ok=bad==NULL && (*env_val)->ExceptionCheck(&env_val)==JNI_TRUE &&
-            (*env_val)->ExceptionOccurred(&env_val)==(jthrowable)&exception_obj;
-    (*env_val)->ExceptionClear(&env_val);
+    jclass bad=env_val->FindClass(&env_val,"android/permission/Unknown");
+    deny_ok=bad==NULL && env_val->ExceptionCheck(&env_val)==JNI_TRUE &&
+            env_val->ExceptionOccurred(&env_val)==(jthrowable)&exception_obj;
+    env_val->ExceptionClear(&env_val);
     JNINativeMethod fake={"unexpected","()V",(void *)onload};
-    deny_ok=deny_ok && (*env_val)->RegisterNatives(&env_val,(jclass)&renderer,
+    deny_ok=deny_ok && env_val->RegisterNatives(&env_val,(jclass)&renderer,
                                                     &fake,1)==JNI_ERR &&
-            (*env_val)->ExceptionCheck(&env_val)==JNI_TRUE &&
+            env_val->ExceptionCheck(&env_val)==JNI_TRUE &&
             registered==2;
-    (*env_val)->ExceptionClear(&env_val);
-    deny_ok=deny_ok && (*env_val)->GetStaticMethodID(&env_val,(jclass)&helper,
+    env_val->ExceptionClear(&env_val);
+    deny_ok=deny_ok && env_val->GetStaticMethodID(&env_val,(jclass)&helper,
                                        "unsupported","()V")==NULL &&
-            (*env_val)->ExceptionCheck(&env_val)==JNI_TRUE;
-    (*env_val)->ExceptionClear(&env_val);
+            env_val->ExceptionCheck(&env_val)==JNI_TRUE;
+    env_val->ExceptionClear(&env_val);
     ok=ok && deny_ok && denied==3 && !pending;
 
     ThreadResult result={0};
