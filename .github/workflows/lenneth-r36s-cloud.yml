@@ -40,22 +40,7 @@ jobs:
           grep -q 'phase34=PASS' cloud-results/result.txt
           grep -q 'phase35=PASS' cloud-results/result.txt
           grep -q 'PHASE35_DEX_AUDIT=PASS' cloud-results/phase35.log
-          grep -q 
-          grep -q 'JNI_ONLOAD_REGISTER_NATIVES[[:space:]]*PASS' cloud-results/lenneth-jni-integration34.tsv
-          grep -q $'^arch\taarch64' cloud-results/environment.tsv
-          grep -q $'^glibc\tglibc 2.41' cloud-results/environment.tsv
-          grep -q $'^memory_limit_bytes\t938803200' cloud-results/environment.tsv
-          grep -q $'^swap_limit_bytes\t0' cloud-results/environment.tsv
-          grep -q $'^commercial_engine_executed\tNO' cloud-results/environment.tsv
-      - name: Publish sanitized cloud diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lenneth-r36s-debian13-cloud-results
-          path: cloud-results/
-          if-no-files-found: warn
-          retention-days: 14
-GATE\tEXTERNAL_APK\t\t\tNOT_PROVIDED' cloud-results/lenneth-dex-contract35.tsv
+          grep -q 'GATE.*EXTERNAL_APK.*NOT_PROVIDED' cloud-results/lenneth-dex-contract35.tsv
           grep -q 'JNI_ONLOAD_REGISTER_NATIVES[[:space:]]*PASS' cloud-results/lenneth-jni-integration34.tsv
           grep -q $'^arch\taarch64' cloud-results/environment.tsv
           grep -q $'^glibc\tglibc 2.41' cloud-results/environment.tsv

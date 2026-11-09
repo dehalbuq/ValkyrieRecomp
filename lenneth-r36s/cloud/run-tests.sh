@@ -93,29 +93,17 @@ grep -q 'COMMERCIAL_ENGINE[[:space:]]*BLOCKED' lenneth-jni-integration34.tsv
 rss34=$(grep -o 'peak_rss_kb=[0-9]*' phase34.log | tail -n1 | cut -d= -f2 || true)
 test -n "$rss34" || rss34=unknown
 printf 'phase34\tPASS\t%s\n' "$rss34" >> suite.tsv
-# Phase35: synthetic DEX metadata integrity and JNI signature classifications only.
+# Phase35: synthetic DEX method-table and JNI flags, no external APK.
 python3 -B /work/lenneth-r36s/cloud/dex_audit35.py \
   --selftest --output /results/lenneth-dex-contract35.tsv \
   > /results/phase35.log
 grep -q 'PHASE35_DEX_AUDIT=PASS' /results/phase35.log
 grep -q 'external_apk=NOT_PROVIDED' /results/phase35.log
-grep -q 
-test "$count" -eq 31
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS commercial_engine=NO\n' "$count" | tee result.txt
-Lorg/cocos2dx/lib/Cocos2dxHelper;\tgetCocos2dxWritablePath\t()Ljava/lang/String;\tDECLARED' /results/lenneth-dex-contract35.tsv
-grep -q 
-test "$count" -eq 30
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS commercial_engine=NO\n' "$count" | tee result.txt
-Lorg/cocos2dx/lib/Cocos2dxRenderer;\tnativeFixtureRender\t()V\tDECLARED_NATIVE' /results/lenneth-dex-contract35.tsv
-grep -q 
-test "$count" -eq 30
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS commercial_engine=NO\n' "$count" | tee result.txt
-Landroid/content/Context;\tgetAssets\t()Landroid/content/res/AssetManager;\tREFERENCE_ONLY' /results/lenneth-dex-contract35.tsv
-grep -q 
-test "$count" -eq 30
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS commercial_engine=NO\n' "$count" | tee result.txt
-GATE\tEXTERNAL_APK\t\t\tNOT_PROVIDED' /results/lenneth-dex-contract35.tsv
+grep -q 'getCocos2dxWritablePath.*DECLARED' /results/lenneth-dex-contract35.tsv
+grep -q 'nativeFixtureRender.*DECLARED_NATIVE' /results/lenneth-dex-contract35.tsv
+grep -q 'getAssets.*REFERENCE_ONLY' /results/lenneth-dex-contract35.tsv
+grep -q 'GATE.*EXTERNAL_APK.*NOT_PROVIDED' /results/lenneth-dex-contract35.tsv
 printf 'phase35\tPASS\tmetadata_only\n' >> suite.tsv
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 30
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 31
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS commercial_engine=NO\n' "$count" | tee result.txt
