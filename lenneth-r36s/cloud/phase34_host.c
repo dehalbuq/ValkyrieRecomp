@@ -22,7 +22,7 @@ static FixtureObject path_obj={"/sandbox/phase34/saves",2};
 static FixtureObject exception_obj={"fixture/Exception",3};
 static FixtureObject path_method={"getCocos2dxWritablePath",4};
 
-static _Thread_local int attached=1, pending=0;
+static _Thread_local int attached=0, pending=0;
 static unsigned registered=0, utf_releases=0, globals=0, denied=0;
 static JNINativeMethod native_init, native_render;
 static const struct JNINativeInterface_ env_api;
@@ -166,6 +166,8 @@ static void *thread_check(void *p) {
     return NULL;
 }
 int main(void) {
+    /* The app/main thread begins attached; new pthreads do not. */
+    attached=1;
     int ok=1, thread_ok=0, deny_ok=0;
     const char *fixture="/tmp/lenneth-phase34-fixture.so";
     /* Path is fixed to our independently compiled synthetic test guest. */
