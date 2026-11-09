@@ -12,6 +12,7 @@ on:
       - port/lenneth-phase39-elf-dependencies
       - port/lenneth-phase40-startup-readiness
       - port/lenneth-phase41-cxx-guards
+      - port/lenneth-phase43-full-link-preflight
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s-cloud.yml"
@@ -28,6 +29,7 @@ jobs:
           set -euo pipefail
           sh -n lenneth-r36s/cloud/coletar-darkosre.sh
           bash -n lenneth-r36s/cloud/run-tests.sh
+          bash -n lenneth-r36s/PortMaster/phase43-preflight.sh
           docker build --platform linux/arm64 \
             -f lenneth-r36s/cloud/Dockerfile \
             -t lenneth-debian13:ci lenneth-r36s
