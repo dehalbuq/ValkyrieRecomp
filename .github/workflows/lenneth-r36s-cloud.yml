@@ -1,0 +1,96 @@
+name: Lenneth ARM64 Cloud Lab (dArkOSRE profile)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - port/lenneth-cloud-lab
+    paths:
+      - "lenneth-r36s/**"
+      - ".github/workflows/lenneth-r36s-cloud.yml"
+permissions:
+  contents: read
+jobs:
+  cloud-native-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native ARM64 compiler and software EGL/GLES
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config gcc binutils time libsdl2-dev \
+            libegl-dev libgles2-mesa-dev libgl1-mesa-dri libgles1
+      - name: Compile native ARM64 and validate R36S collector
+        run: |
+          sh -n lenneth-r36s/cloud/coletar-darkosre.sh
+          cmake -S lenneth-r36s -B build-lenneth -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-lenneth -j 4
+          readelf -h build-lenneth/lenneth-probe | grep -q 'Machine:.*AArch64'
+      - name: Test ABI/JNI/Bionic individually and synthetic ELF lifecycle
+        env:
+          SDL_AUDIODRIVER: dummy
+          SDL_VIDEODRIVER: offscreen
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set -euo pipefail
+          mkdir -p cloud-results
+          printf 'test\tstatus\tpeak_rss_kb\n' > cloud-results/suite.tsv
+          bin=./build-lenneth/lenneth-probe
+          for name in threads fortify cxx fd unicode bionic-data ndk-dl saveops \
+            stdio opensl logging phase17 locale18 phase19 phase20 phase21 \
+            phase22 phase23 startup24 startup25 gles1-probe26 jni27 \
+            gles1-context27 gles1-context28 gles1-render29 \
+            jni-demand31 jni-contract32 jni-services33 pcm; do
+            flag="--$name-selftest"
+            echo "[cloud] testing $flag"
+            timeout 40s /usr/bin/time -f 'peak_rss_kb=%M elapsed=%e' \
+              "$bin" "$flag" > "cloud-results/$name.log" 2>&1 || {
+                cat "cloud-results/$name.log"
+                printf '%s\tFAIL\tunknown\n' "$name" >> cloud-results/suite.tsv
+                exit 1
+              }
+            rss=$(grep -o 'peak_rss_kb=[0-9]*' "cloud-results/$name.log" | tail -n1 | cut -d= -f2)
+            printf '%s\tPASS\t%s\n' "$name" "$rss" >> cloud-results/suite.tsv
+          done
+          cc -shared -nostdlib -fPIC -O2 -fno-stack-protector -Wl,-z,relro \
+            -o /tmp/lenneth-cloud-partner.so lenneth-r36s/tests/phase30_partner.c
+          cc -shared -nostdlib -fPIC -O2 -fno-stack-protector -Wl,-z,relro \
+            -o /tmp/lenneth-cloud-game.so lenneth-r36s/tests/phase30_game.c
+          timeout 20 "$bin" --execute-lifecycle30 \
+            /tmp/lenneth-cloud-game.so /tmp/lenneth-cloud-partner.so \
+            > cloud-results/lifecycle30.log
+          grep -q 'SYNTHETIC_LIFECYCLE=PASS' cloud-results/lifecycle30.log
+          timeout 20 "$bin" --jni-demand31 \
+            /tmp/lenneth-cloud-game.so /tmp/lenneth-cloud-partner.so \
+            > cloud-results/jni-inventory.log
+          grep -q 'JNI_DEMAND=PASS' cloud-results/jni-inventory.log
+          if "$bin" --execute-lifecycle30 /etc/os-release /etc/os-release >/dev/null 2>&1; then
+            echo 'ERROR: invalid ELF accepted'; exit 1
+          fi
+          echo 'R36S: kernel=4.4.189 glibc=2.41 GPU=Mali-G31 KMSDRM ALSA' > cloud-results/differences.txt
+          echo "CLOUD: $(uname -m) $(uname -r) $(getconf GNU_LIBC_VERSION)" >> cloud-results/differences.txt
+          echo 'CLOUD_GPU=Mesa llvmpipe (software only)' >> cloud-results/differences.txt
+          echo 'R36S_PERFORMANCE=NOT_REPRODUCED' >> cloud-results/differences.txt
+          echo 'COMMERCIAL_ENGINE=NOT_EXECUTED' >> cloud-results/differences.txt
+      - name: Optional Mesa GLES1 offscreen test (not Mali validation)
+        continue-on-error: true
+        env:
+          SDL_VIDEODRIVER: offscreen
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          timeout 15 ./build-lenneth/lenneth-probe --gles1-render29 \
+            > cloud-results/mesa-gles1.log 2>&1
+          grep -q 'GLES1_RASTER=PASS' cloud-results/mesa-gles1.log
+      - name: Upload logs, peak memory and compatibility differences
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lenneth-arm64-cloud-lab-results
+          path: cloud-results/
+          if-no-files-found: warn
+          retention-days: 14
