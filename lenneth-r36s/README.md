@@ -1,6 +1,6 @@
 # Valkyrie Profile: Lenneth (Android) — R36S Linux ARM64
 
-**Experimental bootstrap — through phase 32, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
+**Experimental bootstrap — through phase 33, with one-run multitest and controlled synthetic ELF execution. The commercial game does NOT run yet.**
 
 This is a separate effort from the PS1 ValkyrieRecomp project. Its goal is a
 native Linux AArch64 compatibility layer for the user's legitimate Android
@@ -1159,3 +1159,8 @@ literals in libMyGame.so. Phase32 uses only independently authored fixtures:
 The sample method name/signature and string path **are not evidence of the
 real Android game's signatures or APIs**. This is not yet a working JVM,
 Cocos2d Android service layer or playable port.
+
+
+## Phase33 synthetic JNI Android services (fixtures only)
+
+This phase adds an independent JNI service graph fixture for Cocos2dxHelper writable path and language, Android Context, ClassLoader, getSystemService, and a mock in-memory asset manager. It tests JNI function-table layout, fixture-only method signatures, UTF8 strings and references, and denial of unknown Java calls or unsafe asset paths. All signatures and object tokens are illustrative, not validated against the commercial APK. Actual Android ART, constructors, JNI_OnLoad and game assets remain blocked. Report: lenneth-jni-services33.tsv.

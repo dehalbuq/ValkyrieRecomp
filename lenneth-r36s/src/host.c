@@ -50,6 +50,7 @@ int lenneth_jni_synthetic27_selftest(void);
 int lenneth_jni_demand31(const char *game,const char *cxx);
 int lenneth_jni_demand31_selftest(void);
 int lenneth_jni_contract32_selftest(void);
+int lenneth_jni_services33_selftest(void);
 int lenneth_bionic_stdio_legacy_selftest(void);
 int lenneth_phase22_jmp_abi_selftest(void);
 int lenneth_phase21_selftest(void);
@@ -370,6 +371,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     int jni27_self_rc=lenneth_jni_synthetic27_selftest();
     int jni31_self_rc=lenneth_jni_demand31_selftest();
     int jni32_self_rc=lenneth_jni_contract32_selftest();
+    int jni33_self_rc=lenneth_jni_services33_selftest();
     /* One mapping and relocation pass for GLES/EGL + portable C +
        Android AAssetManager + logcat + JNI symbol report. */
     int link_rc=lenneth_batch_phase23_plan(game_path,cxx_path);
@@ -380,10 +382,10 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
     /* Host libraries only; resolves pointers but calls no GL function. */
     int gles26_rc=lenneth_gles1_probe26();
     int video_rc=display?video_probe(15):0;
-    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && phase17_rc==0 && locale18_rc==0 && phase19_rc==0 && phase20_rc==0 && phase21_rc==0 && phase22_stdio_rc==0 && phase22_jmp_rc==0 && phase23_rc==0 && startup24_self_rc==0 && startup24_rc==0 && startup25_rc==0 && startup25_self_rc==0 && gles26_rc==0 && gles26_self_rc==0 && gles27_self_rc==0 && gles28_self_rc==0 && gles29_self_rc==0 && jni27_self_rc==0 && jni31_rc==0 && jni31_self_rc==0 && jni32_self_rc==0 && link_rc==0 && video_rc==0);
+    int ok=(asset_rc==0 && log_rc==0 && thread_rc==0 && fortify_rc==0 && cxx_rc==0 && fd_rc==0 && unicode_rc==0 && data_rc==0 && dynamic_rc==0 && saveops_rc==0 && stdio_rc==0 && opensl_rc==0 && phase17_rc==0 && locale18_rc==0 && phase19_rc==0 && phase20_rc==0 && phase21_rc==0 && phase22_stdio_rc==0 && phase22_jmp_rc==0 && phase23_rc==0 && startup24_self_rc==0 && startup24_rc==0 && startup25_rc==0 && startup25_self_rc==0 && gles26_rc==0 && gles26_self_rc==0 && gles27_self_rc==0 && gles28_self_rc==0 && gles29_self_rc==0 && jni27_self_rc==0 && jni31_rc==0 && jni31_self_rc==0 && jni32_self_rc==0 && jni33_self_rc==0 && link_rc==0 && video_rc==0);
     FILE *sum=fopen("lenneth-suite-summary.txt","w");
     if(sum) {
-        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 32)\n");
+        fprintf(sum,"LENNETH R36S MULTITEST DIAGNOSTIC (phase 33)\n");
         fprintf(sum,"Assets fixture: %s\n",asset_rc==0?"PASS":"FAIL");
         fprintf(sum,"Android logging fixture: %s\n",log_rc==0?"PASS":"FAIL");
         fprintf(sum,"Bionic pthread/cond/TLS synthetic fixtures: %s\n",thread_rc==0?"PASS":"FAIL");
@@ -421,6 +423,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"Phase31 JNI demand scanner / historical Bionic offset selftest: %s\n",jni31_self_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase31 private-library JNI class/method reference inventory: %s\n",jni31_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase32 isolated JNI C ABI and object contract fixture: %s\n",jni32_self_rc==0?"PASS":"FAIL");
+        fprintf(sum,"Phase33 synthetic Android service graph and path sandbox: %s\n",jni33_self_rc==0?"PASS":"FAIL");
         fprintf(sum,"Phase28 EGL 1.x context selection: ISOLATED_DRIVER_PROBE_AFTER_BATCH\n");
         fprintf(sum,"Startup readiness: BLOCKED (JNI/constructors/guest OpenSL not invoked)\n");
         fprintf(sum,"SDL2 standalone PCM hardware fixture: %s\n",
@@ -438,6 +441,7 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         fprintf(sum,"Synthetic constructor and JNI event replay: lenneth-phase30-lifecycle.tsv\n");
         fprintf(sum,"Android JNI/Cocos class and method inventory: lenneth-jni-demand31.tsv\n");
         fprintf(sum,"Synthetic JNI object and service contract: lenneth-jni-contract32.tsv\n");
+        fprintf(sum,"Synthetic Android JNI context/classloader/assets: lenneth-jni-services33.tsv\n");
         fprintf(sum,"Game engine invoked: NO\n");
         fprintf(sum,"Overall diagnostic: %s\n",ok?"PASS":"FAIL");
         if(fclose(sum)!=0){
@@ -450,9 +454,9 @@ static int run_batch(const char *game_path,const char *cxx_path,int display) {
         ok=0;
     }
     printf("[lenneth suite] FINAL=%s asset=%d logging=%d threads=%d fortify=%d cxx=%d fd=%d unicode=%d data=%d dl=%d saveops=%d stdio=%d opensl=%d linking=%d "
-           "phase17=%d locale18=%d phase19=%d phase20=%d phase21=%d phase22_stdio=%d phase22_jmp=%d phase23=%d startup24=%d startup24_self=%d startup25=%d startup25_self=%d gles26=%d gles26_self=%d gles27_self=%d gles28_self=%d gles29_self=%d jni27_self=%d jni31=%d jni31_self=%d jni32_self=%d video_audio_input=%s summary=lenneth-suite-summary.txt "
+           "phase17=%d locale18=%d phase19=%d phase20=%d phase21=%d phase22_stdio=%d phase22_jmp=%d phase23=%d startup24=%d startup24_self=%d startup25=%d startup25_self=%d gles26=%d gles26_self=%d gles27_self=%d gles28_self=%d gles29_self=%d jni27_self=%d jni31=%d jni31_self=%d jni32_self=%d jni33_self=%d video_audio_input=%s summary=lenneth-suite-summary.txt "
            "blockers=lenneth-blockers.tsv engine_executed=NO\n",
-           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,fortify_rc,cxx_rc,fd_rc,unicode_rc,data_rc,dynamic_rc,saveops_rc,stdio_rc,opensl_rc,link_rc,phase17_rc,locale18_rc,phase19_rc,phase20_rc,phase21_rc,phase22_stdio_rc,phase22_jmp_rc,phase23_rc,startup24_rc,startup24_self_rc,startup25_rc,startup25_self_rc,gles26_rc,gles26_self_rc,gles27_self_rc,gles28_self_rc,gles29_self_rc,jni27_self_rc,jni31_rc,jni31_self_rc,jni32_self_rc,
+           ok?"PASS":"FAIL",asset_rc,log_rc,thread_rc,fortify_rc,cxx_rc,fd_rc,unicode_rc,data_rc,dynamic_rc,saveops_rc,stdio_rc,opensl_rc,link_rc,phase17_rc,locale18_rc,phase19_rc,phase20_rc,phase21_rc,phase22_stdio_rc,phase22_jmp_rc,phase23_rc,startup24_rc,startup24_self_rc,startup25_rc,startup25_self_rc,gles26_rc,gles26_self_rc,gles27_self_rc,gles28_self_rc,gles29_self_rc,jni27_self_rc,jni31_rc,jni31_self_rc,jni32_self_rc,jni33_self_rc,
            !display?"CI_SKIP":(video_rc==0?"PASS":"FAIL"));
     return ok?0:12;
 }
@@ -461,6 +465,8 @@ int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IOLBF,0);
     if(argc==4 && strcmp(argv[1],"--jni-demand31")==0)
         return lenneth_jni_demand31(argv[2],argv[3]);
+    if(argc==2 && strcmp(argv[1],"--jni-services33-selftest")==0)
+        return lenneth_jni_services33_selftest();
     if(argc==2 && strcmp(argv[1],"--jni-contract32-selftest")==0)
         return lenneth_jni_contract32_selftest();
     if(argc==2 && strcmp(argv[1],"--jni-demand31-selftest")==0)

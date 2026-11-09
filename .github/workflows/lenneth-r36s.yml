@@ -1,4 +1,4 @@
-name: Lenneth Android R36S - ARM64 phase32 synthetic JNI contract and safe service fixture
+name: Lenneth Android R36S - ARM64 phase33 JNI Context ClassLoader and asset sandbox fixture
 
 on:
   workflow_dispatch:
@@ -7,6 +7,7 @@ on:
       - port/lenneth-android-r36s
       - port/lenneth-phase31-staging
       - port/lenneth-phase32-jni-contract
+      - port/lenneth-phase33-jni-services
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -1211,6 +1212,23 @@ jobs:
           grep -q 'Phase32 isolated JNI C ABI and object contract fixture: PASS' lenneth-suite-summary.txt
           grep -q 'engine_executed=NO' lenneth-phase32-batch.txt
 
+      - name: Phase33 verify synthetic JNI Android service graph and sandbox isolation
+        run: |
+          set -euo pipefail
+          ./build-lenneth/lenneth-probe --jni-services33-selftest | tee lenneth-phase33-selftest.txt
+          grep -q 'JNI_SERVICES=PASS' lenneth-phase33-selftest.txt
+          grep -q 'traversal=DENIED unknown_requests=DENIED' lenneth-phase33-selftest.txt
+          grep -Eq 'JNI_SERVICE_GRAPH[[:space:]]+PASS' lenneth-jni-services33.tsv
+          grep -Eq 'SANDBOX_ASSET_FIXTURE[[:space:]]+PASS' lenneth-jni-services33.tsv
+          grep -Eq 'TRAVERSAL_DENIAL[[:space:]]+PASS' lenneth-jni-services33.tsv
+          grep -Eq 'GAME_METHOD_SIGNATURES[[:space:]]+UNVERIFIED' lenneth-jni-services33.tsv
+          grep -Eq 'COMMERCIAL_ENGINE[[:space:]]+BLOCKED' lenneth-jni-services33.tsv
+          ./build-lenneth/lenneth-probe --batch-headless \
+            /tmp/phase25_game.so /tmp/phase3_partner.so | tee lenneth-phase33-batch.txt
+          grep -q 'FINAL=PASS' lenneth-phase33-batch.txt
+          grep -q 'Phase33 synthetic Android service graph and path sandbox: PASS' lenneth-suite-summary.txt
+          grep -q 'engine_executed=NO' lenneth-phase33-batch.txt
+
       - name: Package only open-source launcher and bootstrap
         run: |
           set -eu
@@ -1227,13 +1245,13 @@ jobs:
           test ! -e package/ports/lenneth-r36s/libMyGame.so
           test ! -e package/ports/lenneth-r36s/libRMS.so
           test ! -e package/ports/lenneth-r36s/assets
-          (cd package && zip -qr ../lenneth-r36s-multitest-phase32-arm64.zip ports)
-          sha256sum lenneth-r36s-multitest-phase32-arm64.zip
-          ls -lh lenneth-r36s-multitest-phase32-arm64.zip
+          (cd package && zip -qr ../lenneth-r36s-multitest-phase33-arm64.zip ports)
+          sha256sum lenneth-r36s-multitest-phase33-arm64.zip
+          ls -lh lenneth-r36s-multitest-phase33-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lenneth-Android-R36S-ARM64-Multitest-Phase32
-          path: lenneth-r36s-multitest-phase32-arm64.zip
+          name: Lenneth-Android-R36S-ARM64-Multitest-Phase33
+          path: lenneth-r36s-multitest-phase33-arm64.zip
           if-no-files-found: error
           retention-days: 14
