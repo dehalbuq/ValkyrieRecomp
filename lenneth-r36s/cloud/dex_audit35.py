@@ -19,6 +19,7 @@ import zlib
 from pathlib import Path
 
 MAX_DEX = 64 * 1024 * 1024
+MAX_STRING_UTF8 = 1024 * 1024  # A string literal is not a JNI identifier.
 MAX_TOTAL = 128 * 1024 * 1024
 MAX_DEX_FILES = 16
 MAX_ROWS = 5000
@@ -35,7 +36,7 @@ CONTRACTS = [
     ("Landroid/content/Context;", "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;"),
     ("Ljava/lang/ClassLoader;", "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"),
 ]
-DEX_NAME = re.compile(r"classes(?:[2-9][0-9]*)?\.dex\Z")
+DEX_NAME = re.compile(r"classes(?:[2-9]|[1-9][0-9]+)?\.dex\Z")
 
 class DexError(ValueError):
     pass
@@ -115,15 +116,15 @@ def parse_dex(data, filename):
         if pos >= len(data):
             raise DexError("invalid string_data offset")
         utf16_length, pos = uleb(data, pos)
-        end = data.find(b"\0", pos, min(pos + 4097, len(data)))
-        if end == -1 or utf16_length > 4096:
+        end = data.find(b"\0", pos, min(pos + MAX_STRING_UTF8 + 1, len(data)))
+        if end == -1 or utf16_length > MAX_STRING_UTF8:
             raise DexError("oversized or unterminated DEX string")
         raw = data[pos:end]
-        # MUTF-8 differs for NUL and surrogate pairs; JNI identifiers usually
-        # use ASCII. Replacement avoids leaking invalid encodings into TSV.
+        # Ordinary DEX string literals may contain tabs, CR/LF, and other
+        # control characters. They are valid data, NOT a parsing error.
+        # MUTF-8 encodes U+0000 as C0 80. Decode defensively and escape
+        # only fields actually written to the TSV report (tsv_cell below).
         txt = raw.replace(b"\xc0\x80", b"\\0").decode("utf-8", "replace")
-        if "\t" in txt or "\n" in txt or "\r" in txt:
-            raise DexError("unsafe method/string token")
         strings.append(txt)
 
     types = []
@@ -262,16 +263,46 @@ def audit(path):
             evidence[key] = status
     return digest, results, evidence
 
+def tsv_cell(value):
+    """Escape report-only cells without rejecting valid DEX string literals.
+
+    Protects TSV row structure and prevents Excel interpreting a cell as
+    a formula. No sanitization is applied to the source DEX itself.
+    """
+    text = str(value)
+    escaped = []
+    for ch in text:
+        code = ord(ch)
+        if ch == "\\":
+            escaped.append("\\\\")
+        elif ch == "\t":
+            escaped.append("\\t")
+        elif ch == "\n":
+            escaped.append("\\n")
+        elif ch == "\r":
+            escaped.append("\\r")
+        elif code < 32 or code == 127:
+            escaped.append("\\x%02x" % code)
+        else:
+            escaped.append(ch)
+    cell = "".join(escaped)
+    return "'" + cell if cell.startswith(("=", "+", "-", "@")) else cell
+
+
+def tsv_row(*cells):
+    return "\t".join(tsv_cell(cell) for cell in cells) + "\n"
+
+
 def save_report(path, digest, results, evidence, fixture=False):
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("component\tclass\tmethod\tsignature\tstatus\n")
         for src, klass, name, sig, status in results:
-            f.write("\t".join((src, klass, name, sig, status)) + "\n")
+            f.write(tsv_row(src, klass, name, sig, status))
         for klass, name, sig in CONTRACTS:
-            f.write("\t".join(("CONTRACT", klass, name, sig,
-                               evidence.get((klass, name, sig), "NOT_OBSERVED"))) + "\n")
+            f.write(tsv_row("CONTRACT", klass, name, sig,
+                            evidence.get((klass, name, sig), "NOT_OBSERVED")))
         for name, total, declared, digest16 in digest:
-            f.write("\t".join(("DEX_SUMMARY", name, str(total), str(declared), digest16)) + "\n")
+            f.write(tsv_row("DEX_SUMMARY", name, str(total), str(declared), digest16))
         f.write("GATE\tEXTERNAL_APK\t\t\t" +
                 ("NOT_PROVIDED" if fixture else "LOCAL_METADATA_ONLY") + "\n")
         f.write("GATE\tCOMMERCIAL_ENGINE\t\t\tNOT_EXECUTED\n")
@@ -288,6 +319,8 @@ def make_fixture():
         "Ljava/lang/Object;", "I", "V",
         "getCocos2dxWritablePath", "nativeFixtureRender", "getAssets", "nativeInit",
         "VI", "L", "V",
+        "Ordinary game string with tab:\t newline:\n carriage-return:\r",
+        "A" * 6000,  # Valid larger string fixture (old 4096-byte cap failed).
     ]
     # Type index list must refer to strings, not descriptor IDs.
     td = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -358,6 +391,9 @@ def rehash(b):
 
 def selftest(output):
     raw = make_fixture()
+    assert b"with tab:\t newline:\n carriage-return:\r" in raw
+    assert tsv_cell("a\tb\nc\rd\\e") == "a\\tb\\nc\\rd\\\\e"
+    assert tsv_cell("=1+1") == "'=1+1"
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         dex = root / "classes.dex"
@@ -398,6 +434,7 @@ def selftest(output):
         try: audit(apk); raise AssertionError("APK without DEX accepted")
         except DexError: pass
     print("PHASE35_DEX_AUDIT=PASS fixture_methods=4 native_declared=2 "
+          "control_chars=ACCEPTED large_strings=ACCEPTED tsv_escape=PASS "
           "checksum=REJECTED truncated=REJECTED indices=REJECTED "
           "zip_traversal=REJECTED missing_dex=REJECTED "
           "external_apk=NOT_PROVIDED engine_executed=NO")
