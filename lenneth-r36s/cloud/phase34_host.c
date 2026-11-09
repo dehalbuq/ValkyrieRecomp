@@ -169,7 +169,7 @@ int main(void) {
     /* The app/main thread begins attached; new pthreads do not. */
     attached=1;
     int ok=1, thread_ok=0, deny_ok=0;
-    const char *fixture="/tmp/lenneth-phase34-fixture.so";
+    const char *fixture="/results/lenneth-phase34-fixture.so";
     /* Path is fixed to our independently compiled synthetic test guest. */
     void *lib=dlopen(fixture,RTLD_NOW|RTLD_LOCAL);
     if(!lib){fprintf(stderr,"phase34 fixture unavailable: %s\n",dlerror());return 34;}

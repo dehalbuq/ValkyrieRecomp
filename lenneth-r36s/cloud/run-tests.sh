@@ -69,17 +69,18 @@ else
   printf 'MESA_SOFTWARE_GLES1=UNAVAILABLE\n' > mesa-status.txt
 fi
 # Phase34: real JNI C header ABI; independently compiled synthetic JNI_OnLoad.
+trap 'rm -f /results/lenneth-phase34-host /results/lenneth-phase34-fixture.so' EXIT
 jni_header=$(find /usr/lib/jvm -type f -name jni.h -print -quit)
 test -n "$jni_header" && test -f "$jni_header"
 jni_include=$(dirname "$jni_header")
 cc -std=c11 -O2 -Wall -Wextra -fPIC -shared -Wl,-z,relro \
   -I "$jni_include" -I "$jni_include/linux" \
-  -o /tmp/lenneth-phase34-fixture.so /work/lenneth-r36s/cloud/phase34_guest.c
+  -o /results/lenneth-phase34-fixture.so /work/lenneth-r36s/cloud/phase34_guest.c
 cc -std=c11 -O2 -Wall -Wextra -pthread \
   -I "$jni_include" -I "$jni_include/linux" \
-  -o /tmp/lenneth-phase34-host /work/lenneth-r36s/cloud/phase34_host.c -ldl
+  -o /results/lenneth-phase34-host /work/lenneth-r36s/cloud/phase34_host.c -ldl
 timeout 20 /usr/bin/time -f 'peak_rss_kb=%M elapsed=%e' \
-  /tmp/lenneth-phase34-host > phase34.log 2>&1 || {
+  /results/lenneth-phase34-host > phase34.log 2>&1 || {
     cat phase34.log
     printf 'phase34\tFAIL\tunknown\n' >> suite.tsv
     exit 46
