@@ -9,3 +9,11 @@ O perfil original enviado pelo usuário NÃO foi publicado: apenas especificaç�
 Limitações: Debian 13 e glibc ficam próximos do R36S, mas o contêiner usa o kernel do host, CPU de servidor e Mesa llvmpipe por software. O teste não representa Mali-G31, drivers GBM do dispositivo, timings, FPS ou compatibilidade exata com o kernel 4.4.189. Use o console apenas nas versões que precisam de validação de hardware.
 
 O nome do arquivo do perfil informa 04/09/2025, enquanto o kernel reporta compilação de 13/12/2025: o relógio do console parece desajustado e não é uma referência temporal confiável.
+
+## Fase 34 — integração com biblioteca JNI sintética
+
+O novo conjunto cloud/phase34_host.c e cloud/phase34_guest.c compila um ELF AArch64 sintético contra o cabeçalho JNI padrão (OpenJDK jni.h), carrega uma biblioteca criada apenas para testes, invoca JNI_OnLoad, valida RegisterNatives para dois callbacks de teste, chama nativeInit/nativeRender, exercita GetEnv e attach/detach por thread e rejeita nomes e assinaturas desconhecidos.
+
+O log phase34.log e a tabela lenneth-jni-integration34.tsv são adicionados ao artefato Debian13. Os nomes dos métodos da biblioteca são fixtures, não assinaturas verificadas do jogo. Não há execução de arquivos comerciais nem uma implementação ART completa.
+
+**Próximo bloqueio:** verificar assinaturas Java e serviços reais do APK (classes.dex e RegisterNatives), depois integrar assets e ciclo de vida Cocos2d ao carregador.

@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
  bash ca-certificates cmake ninja-build gcc g++ binutils pkg-config \
  libsdl2-dev libegl-dev libgles-dev libgles1 libgl1-mesa-dri \
- libasound2-dev coreutils time file \
+ libasound2-dev default-jdk-headless coreutils time file \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /work
 COPY . /work/lenneth-r36s/

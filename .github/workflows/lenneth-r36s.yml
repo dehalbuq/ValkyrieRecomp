@@ -9,6 +9,7 @@ on:
       - port/lenneth-phase32-jni-contract
       - port/lenneth-phase33-jni-services
       - port/lenneth-cloud-lab
+      - port/lenneth-phase34-integration
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"

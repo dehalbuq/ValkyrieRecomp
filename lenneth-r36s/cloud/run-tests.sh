@@ -68,6 +68,30 @@ if timeout 20 "$bin" --gles1-render29 > mesa-gles1.log 2>&1; then
 else
   printf 'MESA_SOFTWARE_GLES1=UNAVAILABLE\n' > mesa-status.txt
 fi
+# Phase34: real JNI C header ABI; independently compiled synthetic JNI_OnLoad.
+jni_header=$(find /usr/lib/jvm -type f -name jni.h -print -quit)
+test -n "$jni_header" && test -f "$jni_header"
+jni_include=$(dirname "$jni_header")
+cc -std=c11 -O2 -Wall -Wextra -fPIC -shared -Wl,-z,relro \
+  -I "$jni_include" -I "$jni_include/linux" \
+  -o /tmp/lenneth-phase34-fixture.so /work/lenneth-r36s/cloud/phase34_guest.c
+cc -std=c11 -O2 -Wall -Wextra -pthread \
+  -I "$jni_include" -I "$jni_include/linux" \
+  -o /tmp/lenneth-phase34-host /work/lenneth-r36s/cloud/phase34_host.c -ldl
+timeout 20 /usr/bin/time -f 'peak_rss_kb=%M elapsed=%e' \
+  /tmp/lenneth-phase34-host > phase34.log 2>&1 || {
+    cat phase34.log
+    printf 'phase34\tFAIL\tunknown\n' >> suite.tsv
+    exit 46
+  }
+grep -q 'JNI_INTEGRATION=PASS' phase34.log
+grep -q 'RegisterNatives=PASS' phase34.log
+grep -q 'nativeInit_render=PASS' phase34.log
+grep -q 'JNI_ONLOAD_REGISTER_NATIVES[[:space:]]*PASS' lenneth-jni-integration34.tsv
+grep -q 'COMMERCIAL_ENGINE[[:space:]]*BLOCKED' lenneth-jni-integration34.tsv
+rss34=$(grep -o 'peak_rss_kb=[0-9]*' phase34.log | tail -n1 | cut -d= -f2 || true)
+test -n "$rss34" || rss34=unknown
+printf 'phase34\tPASS\t%s\n' "$rss34" >> suite.tsv
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 29
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 30
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS commercial_engine=NO\n' "$count" | tee result.txt

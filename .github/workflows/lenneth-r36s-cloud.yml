@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - port/lenneth-cloud-lab
+      - port/lenneth-phase34-integration
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s-cloud.yml"
@@ -35,6 +36,8 @@ jobs:
             --volume "$PWD/cloud-results:/results" \
             lenneth-debian13:ci | tee cloud-results/console.log
           grep -q 'CLOUD_DEBIAN13_FINAL=PASS' cloud-results/result.txt
+          grep -q 'phase34=PASS' cloud-results/result.txt
+          grep -q 'JNI_ONLOAD_REGISTER_NATIVES[[:space:]]*PASS' cloud-results/lenneth-jni-integration34.tsv
           grep -q $'^arch\taarch64' cloud-results/environment.tsv
           grep -q $'^glibc\tglibc 2.41' cloud-results/environment.tsv
           grep -q $'^memory_limit_bytes\t938803200' cloud-results/environment.tsv
