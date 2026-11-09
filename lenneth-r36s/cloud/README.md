@@ -45,3 +45,12 @@ Os seis nomes de símbolos e descritores de `nativeSetContext`, `nativeInit`, `n
 O CI compila **uma nova biblioteca ELF ARM64 sintética**, com nomes de exportações equivalentes aos do jogo, e carrega exclusivamente essa fixture. Valida a sequência de `JNI_OnLoad` 1.6 de teste, Context e AssetManager de teste, referências globais, inicialização 640×480, render, pausa, retomada, mudança de superfície 320×240 e limpeza dos dois handles. Testes negativos verificam ordem incorreta, AssetManager de tipo errado, contexto duplicado, tamanho inválido e render durante pausa.
 
 O relatório `lenneth-jni-lifecycle37.tsv` diferencia claramente mocks aprovados e bloqueios reais. **Nenhum construtor comercial, JNI_OnLoad real, motor Cocos2d original ou asset do jogo é executado no CI público.** O ambiente não representa o kernel 4.4.189, a GPU Mali nem desempenho real do R36S. As regressões anteriores continuam em workflows independentes.
+
+
+## Fase 38 — JNI Context → NDK AAssetManager → leitura segura
+
+O ELF ARM64 **sintético** phase38_guest.c usa as assinaturas públicas de JNI identificadas no APK e importa os símbolos NDK AAssetManager_fromJava, AAssetManager_open, AAsset_read, AAsset_seek64, AAsset_getLength64 e AAsset_close. O phase38_host.c fornece esses símbolos apenas para um diretório privado de teste, sem APK, assets ou motor comercial.
+
+Um arquivo de teste original deste laboratório, config/boot.txt com o marcador PHASE38_BOOT_READY, só é gerado após testar a falha controlada de inicialização sem assets. O guest então tenta abrir, ler em duas partes, consultar comprimento, reposicionar, fechar e iniciar um ciclo render/pausa/retomada sintético. O acesso é limitado por openat com diretórios validados, O_NOFOLLOW, rejeição de symlinks, .., caminhos absolutos, segmentos vazios e caracteres inesperados; arquivo máximo de 1 MiB e limite de descritores abertos. O teste valida fechamento de todos os handles e liberação de ambas as global refs do Context/AssetManager.
+
+Resultados em lenneth-asset-bridge38.tsv. O log distingue as verificações dos *bloqueios*: dados reais do APK, ART, JNI comercial, GPU Mali, driver/kernel dArkOSRE e motor Cocos2d real continuam sem validação ou bloqueados. Nenhum arquivo comercial é colocado no GitHub, nenhum código do jogo é executado. A regressão das Fases 1–37 permanece separada.

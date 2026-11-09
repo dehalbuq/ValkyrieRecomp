@@ -8,6 +8,7 @@ on:
       - port/lenneth-phase35-dex-audit
       - port/lenneth-phase36-jni-join
       - port/lenneth-phase37-jni-lifecycle
+      - port/lenneth-phase38-asset-bridge
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s-cloud.yml"
@@ -43,6 +44,9 @@ jobs:
           grep -q 'phase35=PASS' cloud-results/result.txt
           grep -q 'phase36=PASS' cloud-results/result.txt
           grep -q 'phase37=PASS' cloud-results/result.txt
+          grep -q 'phase38=PASS' cloud-results/result.txt
+          grep -q 'PHASE38_ASSET_BRIDGE=PASS' cloud-results/phase38.log
+          grep -q 'TRAVERSAL_AND_SYMLINK_DENIAL[[:space:]]*PASS' cloud-results/lenneth-asset-bridge38.tsv
           grep -q 'PHASE37_JNI_LIFECYCLE=PASS' cloud-results/phase37.log
           grep -q 'NO_REF_LEAK_AFTER_RESET[[:space:]]*PASS' cloud-results/lenneth-jni-lifecycle37.tsv
           grep -q 'PHASE36_JNI_JOIN=PASS' cloud-results/phase36.log

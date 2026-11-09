@@ -146,6 +146,43 @@ rss37=$(grep -o 'peak_rss_kb=[0-9]*' /results/phase37.log | tail -n1 | cut -d= -
 if [ -z "$rss37" ]; then rss37=unknown; fi
 printf 'phase37\tPASS\t%s\n' "$rss37" >> suite.tsv
 rm -f /results/lenneth-phase37-fixture.so /results/lenneth-phase37-host
+# Phase38: synthetic JNI/NDK AAssetManager bridge, no original game data.
+cc -std=c11 -O2 -Wall -Wextra -fPIC -shared -Wl,-z,relro \
+  -I "$jni_include" -I "$jni_include/linux" \
+  -o /results/lenneth-phase38-fixture.so /work/lenneth-r36s/cloud/phase38_guest.c
+cc -std=c11 -O2 -Wall -Wextra -rdynamic \
+  -I "$jni_include" -I "$jni_include/linux" \
+  -o /results/lenneth-phase38-host /work/lenneth-r36s/cloud/phase38_host.c -ldl
+readelf -h /results/lenneth-phase38-fixture.so | grep -q 'Machine:.*AArch64'
+readelf -h /results/lenneth-phase38-host | grep -q 'Machine:.*AArch64'
+nm -D /results/lenneth-phase38-fixture.so > /results/phase38-guest-symbols.txt
+nm -D /results/lenneth-phase38-host > /results/phase38-host-symbols.txt
+for ndk in AAssetManager_fromJava AAssetManager_open AAsset_read \
+           AAsset_seek64 AAsset_getLength64 AAsset_close; do
+  grep -Eq " U $ndk$" /results/phase38-guest-symbols.txt || {
+    echo "ERROR: missing guest import $ndk"; exit 48
+  }
+  grep -Eq " T $ndk$" /results/phase38-host-symbols.txt || {
+    echo "ERROR: missing host export $ndk"; exit 48
+  }
+done
+timeout 25 /usr/bin/time -f 'peak_rss_kb=%M elapsed=%e' \
+  /results/lenneth-phase38-host > /results/phase38.log 2>&1 || {
+    cat /results/phase38.log
+    printf 'phase38\tFAIL\tunknown\n' >> suite.tsv
+    exit 48
+  }
+grep -q 'PHASE38_ASSET_BRIDGE=PASS' /results/phase38.log
+grep -q 'traversal_symlink=DENIED' /results/phase38.log
+grep -q 'refs_remaining=0' /results/phase38.log
+grep -q 'STREAMED_ASSET_BOOT[[:space:]]*PASS' /results/lenneth-asset-bridge38.tsv
+grep -q 'TRAVERSAL_AND_SYMLINK_DENIAL[[:space:]]*PASS' /results/lenneth-asset-bridge38.tsv
+grep -q 'ASSET_AND_GLOBAL_REF_LEAKS[[:space:]]*PASS' /results/lenneth-asset-bridge38.tsv
+grep -q 'ACTUAL_APK_ASSET_MANAGER[[:space:]]*BLOCKED' /results/lenneth-asset-bridge38.tsv
+rss38=$(grep -o 'peak_rss_kb=[0-9]*' /results/phase38.log | tail -n1 | cut -d= -f2 || true)
+if [ -z "$rss38" ]; then rss38=unknown; fi
+printf 'phase38\tPASS\t%s\n' "$rss38" >> suite.tsv
+rm -f /results/lenneth-phase38-host /results/lenneth-phase38-fixture.so
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 33
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 34
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS phase38=PASS commercial_engine=NO\n' "$count" | tee result.txt
