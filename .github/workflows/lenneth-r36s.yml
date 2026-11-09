@@ -12,6 +12,7 @@ on:
       - port/lenneth-phase34-integration
       - port/lenneth-phase35-dex-audit
       - port/lenneth-phase36-jni-join
+      - port/lenneth-phase37-jni-lifecycle
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"

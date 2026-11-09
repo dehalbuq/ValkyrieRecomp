@@ -37,3 +37,11 @@ Exemplo: `python3 jni_crosscheck36.py --dex assinaturas-jni.tsv --inventory lenn
 Verifica os nomes JNI curtos e longos com a codificação JNI de classes/métodos (incluindo nomes Unicode e underscores). Distingue correspondências exatas, ambiguidade de sobrecargas e declarações nativas sem símbolo `Java_...` nesse módulo. Métodos nativos sem export podem usar `RegisterNatives`, outras bibliotecas, ou não possuir implementação: **não é um veredito**. O relatório da nuvem utiliza SOMENTE fixtures sintéticos, não contém dados do APK real.
 
 Um cruzamento local com os metadados fornecidos mostrou 55 declarações `ACC_NATIVE` no APK, 29 exports `Java_...` na libMyGame.so, 29 correspondências e 26 declarações não exportadas por esse módulo. JNI_OnLoad também está exportado, mas a execução comercial segue bloqueada.
+
+## Fase 37 — ciclo de vida JNI usando metadados conferidos
+
+Os seis nomes de símbolos e descritores de `nativeSetContext`, `nativeInit`, `nativeRender`, `nativeOnPause`, `nativeOnResume` e `nativeOnSurfaceChanged` constam em `phase37_contract.tsv`. Eles foram conferidos por leitura offline das declarações nativas DEX e inventário ELF (`DEX35_ELF31_CONFIRMED`). Isso verifica a ABI nominal, **não** a implementação ou funcionalidade do jogo.
+
+O CI compila **uma nova biblioteca ELF ARM64 sintética**, com nomes de exportações equivalentes aos do jogo, e carrega exclusivamente essa fixture. Valida a sequência de `JNI_OnLoad` 1.6 de teste, Context e AssetManager de teste, referências globais, inicialização 640×480, render, pausa, retomada, mudança de superfície 320×240 e limpeza dos dois handles. Testes negativos verificam ordem incorreta, AssetManager de tipo errado, contexto duplicado, tamanho inválido e render durante pausa.
+
+O relatório `lenneth-jni-lifecycle37.tsv` diferencia claramente mocks aprovados e bloqueios reais. **Nenhum construtor comercial, JNI_OnLoad real, motor Cocos2d original ou asset do jogo é executado no CI público.** O ambiente não representa o kernel 4.4.189, a GPU Mali nem desempenho real do R36S. As regressões anteriores continuam em workflows independentes.

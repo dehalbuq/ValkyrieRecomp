@@ -115,6 +115,37 @@ grep -q 'fixture_only=YES commercial_engine=NO' /results/phase36.log
 grep -q 'AMBIGUOUS_OVERLOAD' /results/lenneth-jni-join36.tsv
 grep -q 'NOT_EXPORTED_BY_LIBMYGAME' /results/lenneth-jni-join36.tsv
 printf 'phase36\tPASS\tmetadata_only\n' >> suite.tsv
+# Phase37: synthetic AArch64 JNI ELF with DEX/ELF-confirmed entrypoints.
+cc -std=c11 -O2 -Wall -Wextra -fPIC -shared -Wl,-z,relro \
+  -I "$jni_include" -I "$jni_include/linux" \
+  -o /results/lenneth-phase37-fixture.so /work/lenneth-r36s/cloud/phase37_guest.c
+cc -std=c11 -O2 -Wall -Wextra -Werror \
+  -I "$jni_include" -I "$jni_include/linux" \
+  -o /results/lenneth-phase37-host /work/lenneth-r36s/cloud/phase37_host.c -ldl
+readelf -h /results/lenneth-phase37-fixture.so | grep -q 'Machine:.*AArch64'
+nm -D --defined-only /results/lenneth-phase37-fixture.so > /results/phase37-exports.txt
+while IFS=$'\t' read -r class method signature export provenance; do
+  [ "$class" = class ] && continue
+  [ "$provenance" = DEX35_ELF31_CONFIRMED ] || { echo "ERROR: contract provenance";exit 47; }
+  grep -q " $export$" /results/phase37-exports.txt || { echo "ERROR: missing $export";exit 47; }
+done < /work/lenneth-r36s/cloud/phase37_contract.tsv
+grep -q ' JNI_OnLoad$' /results/phase37-exports.txt
+timeout 20 /usr/bin/time -f 'peak_rss_kb=%M elapsed=%e' \
+  /results/lenneth-phase37-host > /results/phase37.log 2>&1 || {
+  cat /results/phase37.log
+  printf 'phase37\tFAIL\tunknown\n' >> suite.tsv
+  exit 47
+}
+grep -q 'PHASE37_JNI_LIFECYCLE=PASS' /results/phase37.log
+grep -q 'negative=PASS' /results/phase37.log
+grep -q 'globals_released=2' /results/phase37.log
+grep -q 'INIT_RENDER_PAUSE_RESUME[[:space:]]*PASS' /results/lenneth-jni-lifecycle37.tsv
+grep -q 'NO_REF_LEAK_AFTER_RESET[[:space:]]*PASS' /results/lenneth-jni-lifecycle37.tsv
+grep -q 'COMMERCIAL_CONSTRUCTORS_AND_JNI[[:space:]]*BLOCKED' /results/lenneth-jni-lifecycle37.tsv
+rss37=$(grep -o 'peak_rss_kb=[0-9]*' /results/phase37.log | tail -n1 | cut -d= -f2 || true)
+if [ -z "$rss37" ]; then rss37=unknown; fi
+printf 'phase37\tPASS\t%s\n' "$rss37" >> suite.tsv
+rm -f /results/lenneth-phase37-fixture.so /results/lenneth-phase37-host
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 32
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 33
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS commercial_engine=NO\n' "$count" | tee result.txt
