@@ -229,7 +229,7 @@ else
 fi
 
 # Package twelve text reports; never include game binaries/assets. Never include libraries or game assets.
-if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ] && [ -f "$root/lenneth-phase25-startup-plan.tsv" ] && [ -f "$root/lenneth-gles1-runtime26.tsv" ] && [ -f "$root/lenneth-gles1-context27.tsv" ] && [ -f "$root/lenneth-gles1-selection28.tsv" ] && [ -f "$root/lenneth-gles1-raster29.tsv" ] && [ -f "$root/lenneth-phase30-lifecycle.tsv" ] && [ -f "$root/lenneth-jni-demand31.tsv" "$root/lenneth-jni-contract32.tsv" ]; then
+if [ -f "$root/lenneth-suite-summary.txt" ] && [ -f "$root/lenneth-blockers.tsv" ] && [ -f "$root/lenneth-startup-gates.tsv" ] && [ -f "$root/lenneth-phase25-startup-plan.tsv" ] && [ -f "$root/lenneth-gles1-runtime26.tsv" ] && [ -f "$root/lenneth-gles1-context27.tsv" ] && [ -f "$root/lenneth-gles1-selection28.tsv" ] && [ -f "$root/lenneth-gles1-raster29.tsv" ] && [ -f "$root/lenneth-phase30-lifecycle.tsv" ] && [ -f "$root/lenneth-jni-demand31.tsv" ] && [ -f "$root/lenneth-jni-contract32.tsv" ]; then
     if command -v zip >/dev/null 2>&1; then
         (cd "$root" && zip -q -j "lenneth-r36s-diagnostics.zip" \
           "lenneth-r36s.log" "lenneth-suite-summary.txt" "lenneth-blockers.tsv" "lenneth-startup-gates.tsv" "lenneth-phase25-startup-plan.tsv" "lenneth-gles1-runtime26.tsv" "lenneth-gles1-context27.tsv" "lenneth-gles1-selection28.tsv" "lenneth-gles1-raster29.tsv" "lenneth-phase30-lifecycle.tsv" "lenneth-jni-demand31.tsv" "lenneth-jni-contract32.tsv") \
