@@ -183,6 +183,29 @@ rss38=$(grep -o 'peak_rss_kb=[0-9]*' /results/phase38.log | tail -n1 | cut -d= -
 if [ -z "$rss38" ]; then rss38=unknown; fi
 printf 'phase38\tPASS\t%s\n' "$rss38" >> suite.tsv
 rm -f /results/lenneth-phase38-host /results/lenneth-phase38-fixture.so
+# Phase39: read-only dynamic import/DT_NEEDED audit of mock ARM64 .so files.
+# No real APK, commercial libraries, or game code in public CI.
+cc -fPIC -shared -nostdlib -Wl,-soname,libphase39provider.so \
+  -o /results/libphase39provider.so /work/lenneth-r36s/cloud/phase39_provider.c
+cc -fPIC -shared -nostdlib -Wl,-soname,libphase39consumer.so \
+  -Wl,--no-as-needed \
+  -o /results/libphase39consumer.so /work/lenneth-r36s/cloud/phase39_consumer.c \
+  -L /results -lphase39provider
+readelf -h /results/libphase39consumer.so | grep -q 'Machine:.*AArch64'
+readelf -d /results/libphase39consumer.so | grep -q 'libphase39provider.so'
+python3 -B /work/lenneth-r36s/cloud/elf_dependencies39.py \
+  --modules /results/libphase39consumer.so /results/libphase39provider.so \
+  --output /results/lenneth-elf-dependencies39.tsv --fixture-check \
+  > /results/phase39.log || { cat /results/phase39.log; exit 49; }
+grep -q 'PHASE39_ELF_DEPENDENCIES=PASS' /results/phase39.log
+grep -q 'cross_elf=PASS missing_provider=REPORTED' /results/phase39.log
+grep -q $'IMPORT\tCROSS_ELF_CANDIDATE\tphase39_shared_api' /results/lenneth-elf-dependencies39.tsv
+grep -q $'IMPORT\tPROVIDER_NOT_ESTABLISHED\tphase39_missing_api' /results/lenneth-elf-dependencies39.tsv
+grep -q $'IMPORT\tWEAK_OPTIONAL\tphase39_weak_api' /results/lenneth-elf-dependencies39.tsv
+grep -q $'RELOCATION_AND_SYMBOL_VERSIONS\tUNVERIFIED' /results/lenneth-elf-dependencies39.tsv
+grep -q $'COMMERCIAL_ENGINE\tNOT_EXECUTED' /results/lenneth-elf-dependencies39.tsv
+printf 'phase39\tPASS\tELF_metadata_only\n' >> suite.tsv
+rm -f /results/libphase39provider.so /results/libphase39consumer.so
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 34
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS phase38=PASS commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 35
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS phase38=PASS phase39=PASS commercial_engine=NO\n' "$count" | tee result.txt

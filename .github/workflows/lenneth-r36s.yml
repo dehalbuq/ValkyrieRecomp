@@ -14,6 +14,7 @@ on:
       - port/lenneth-phase36-jni-join
       - port/lenneth-phase37-jni-lifecycle
       - port/lenneth-phase38-asset-bridge
+      - port/lenneth-phase39-elf-dependencies
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"

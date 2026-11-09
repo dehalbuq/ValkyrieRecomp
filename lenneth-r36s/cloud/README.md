@@ -54,3 +54,16 @@ O ELF ARM64 **sintético** phase38_guest.c usa as assinaturas públicas de JNI i
 Um arquivo de teste original deste laboratório, config/boot.txt com o marcador PHASE38_BOOT_READY, só é gerado após testar a falha controlada de inicialização sem assets. O guest então tenta abrir, ler em duas partes, consultar comprimento, reposicionar, fechar e iniciar um ciclo render/pausa/retomada sintético. O acesso é limitado por openat com diretórios validados, O_NOFOLLOW, rejeição de symlinks, .., caminhos absolutos, segmentos vazios e caracteres inesperados; arquivo máximo de 1 MiB e limite de descritores abertos. O teste valida fechamento de todos os handles e liberação de ambas as global refs do Context/AssetManager.
 
 Resultados em lenneth-asset-bridge38.tsv. O log distingue as verificações dos *bloqueios*: dados reais do APK, ART, JNI comercial, GPU Mali, driver/kernel dArkOSRE e motor Cocos2d real continuam sem validação ou bloqueados. Nenhum arquivo comercial é colocado no GitHub, nenhum código do jogo é executado. A regressão das Fases 1–37 permanece separada.
+
+
+## Fase39: mapa real de dependências ELF ARM64 — leitura local, sem executar o jogo
+
+O script Python 3 sem dependências externas \`cloud/elf_dependencies39.py\` analisa em modo estritamente *read-only* arquivos ELF64 AArch64 (arquivos \`libMyGame.so\` e \`libc++_shared.so\` do APK próprio, **apenas localmente**). Extrai \`SHT_DYNSYM\`, importações, exportações, \`DT_NEEDED\` e \`DT_SONAME\`, com validações de limites, índice, tamanho, arquitetura e tipo. Resulta no relatório \`lenneth-elf-dependencies39.tsv\`.
+
+Uso local (não precisa do R36S, não faz upload): \`py elf_dependencies39.py --modules .\libMyGame.so .\libc++_shared.so --output .\dependencias39.tsv\`. Revise o relatório antes de compartilhá-lo. **Não coloque as bibliotecas comerciais no GitHub.**
+
+Classificação conservadora: \`CROSS_ELF_CANDIDATE\` (símbolo coincidente entre bibliotecas fornecidas, NÃO prova relocação/call ABI); \`PROVIDER_NOT_ESTABLISHED\` (a fonte não foi identificada entre os arquivos fornecidos, **NÃO** significa que faltou do Android); \`WEAK_OPTIONAL\` (import weak); \`EXTERNAL_NOT_VERIFIED\` (biblioteca \`DT_NEEDED\` ausente da seleção local). Nenhum import de sistema é falsamente marcado como resolvido.
+
+O CI roda com **duas bibliotecas ARM64 sintéticas**, uma delas importando símbolo disponibilizado, símbolo de propósito sem provedor e símbolo fraco opcional. Os testes recusam ELF malformado e verificam export/DT_NEEDED. O arquivo comercial original permanece totalmente fora do runner.
+
+**Bloqueios ainda reais:** detalhes de relocação/versão de símbolos, Bionic Android versus glibc Linux, serviços Android/ART/Cocos2d reais, assets reais, Mali-G31 e execução do \`JNI_OnLoad\` original. A Fase39 gera o diagnóstico necessário para priorizar compatibilidade, sem alegar que o jogo já inicializa.

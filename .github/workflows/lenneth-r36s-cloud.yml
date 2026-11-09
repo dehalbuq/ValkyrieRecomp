@@ -9,6 +9,7 @@ on:
       - port/lenneth-phase36-jni-join
       - port/lenneth-phase37-jni-lifecycle
       - port/lenneth-phase38-asset-bridge
+      - port/lenneth-phase39-elf-dependencies
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s-cloud.yml"
@@ -45,6 +46,9 @@ jobs:
           grep -q 'phase36=PASS' cloud-results/result.txt
           grep -q 'phase37=PASS' cloud-results/result.txt
           grep -q 'phase38=PASS' cloud-results/result.txt
+          grep -q 'phase39=PASS' cloud-results/result.txt
+          grep -q 'PHASE39_ELF_DEPENDENCIES=PASS' cloud-results/phase39.log
+          grep -q $'COMMERCIAL_ENGINE\tNOT_EXECUTED' cloud-results/lenneth-elf-dependencies39.tsv
           grep -q 'PHASE38_ASSET_BRIDGE=PASS' cloud-results/phase38.log
           grep -q 'TRAVERSAL_AND_SYMLINK_DENIAL[[:space:]]*PASS' cloud-results/lenneth-asset-bridge38.tsv
           grep -q 'PHASE37_JNI_LIFECYCLE=PASS' cloud-results/phase37.log
