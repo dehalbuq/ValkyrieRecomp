@@ -17,3 +17,12 @@ O novo conjunto cloud/phase34_host.c e cloud/phase34_guest.c compila um ELF AArc
 O log phase34.log e a tabela lenneth-jni-integration34.tsv são adicionados ao artefato Debian13. Os nomes dos métodos da biblioteca são fixtures, não assinaturas verificadas do jogo. Não há execução de arquivos comerciais nem uma implementação ART completa.
 
 **Próximo bloqueio:** verificar assinaturas Java e serviços reais do APK (classes.dex e RegisterNatives), depois integrar assets e ciclo de vida Cocos2d ao carregador.
+
+
+## Fase 35 — auditor local de classes.dex e JNI
+
+O script `cloud/dex_audit35.py` lê no computador os arquivos `classes*.dex` de um APK ou um DEX individual, compara assinaturas Java/JNI e identifica métodos efetivamente declarados, métodos com `ACC_NATIVE` e meras referências a métodos externos. O relatório TSV contém apenas metadados, sem copiar ou enviar APK, arquivos do jogo, assets ou código executável. Nenhum upload automático acontece. Verifica cabeçalho, SHA1, Adler32, integridade dos índices e arquivos ZIP suspeitos.
+
+**Uso local opcional:** `python3 dex_audit35.py /caminho/jogo.apk --output assinaturas-jni.tsv`. Não coloque o APK original no repositório público. Revise o TSV antes de compartilhar. O CI da Fase 35 usa apenas um DEX sintético criado por nosso código e **não comprova assinaturas do APK comercial**. O relatório da nuvem marca `EXTERNAL_APK=NOT_PROVIDED`. Nenhum teste no R36S é necessário nesta fase.
+
+O próximo passo para integrar a versão Android 1.0.7 é confrontar as assinaturas do DEX verdadeiro com a lista de símbolos JNI da biblioteca original, sem subir nenhum arquivo comercial ao CI público.

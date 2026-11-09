@@ -10,6 +10,7 @@ on:
       - port/lenneth-phase33-jni-services
       - port/lenneth-cloud-lab
       - port/lenneth-phase34-integration
+      - port/lenneth-phase35-dex-audit
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
