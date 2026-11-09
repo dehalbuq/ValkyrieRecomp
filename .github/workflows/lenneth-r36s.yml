@@ -16,6 +16,7 @@ on:
       - port/lenneth-phase38-asset-bridge
       - port/lenneth-phase39-elf-dependencies
       - port/lenneth-phase40-startup-readiness
+      - port/lenneth-phase41-cxx-guards
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -47,6 +48,12 @@ jobs:
           cmake --build build-lenneth -v -j 4
           file build-lenneth/lenneth-probe
           readelf -h build-lenneth/lenneth-probe | grep -q 'Machine:.*AArch64'
+
+      - name: Phase41 validate independent C++ guard initialization and pthread ownership
+        run: |
+          ./build-lenneth/lenneth-probe --cxx-guard41-selftest | tee lenneth-cxx-guard41.txt
+          grep -q 'GUARD_SELFTEST=PASS' lenneth-cxx-guard41.txt
+          grep -q 'commercial_game=NOT_EXECUTED' lenneth-cxx-guard41.txt
 
       - name: Verify read-only ELF audit using an ARM64 system executable
         run: |

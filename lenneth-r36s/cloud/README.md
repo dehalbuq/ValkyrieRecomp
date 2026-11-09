@@ -78,3 +78,12 @@ Uso local: \`py startup_gate40.py --diagnostics .\lenneth-r36s-diagnostics.zip -
 Um diagnóstico R36S fornecido pelo usuário indicou 195 slots de construtor de \`libMyGame.so\`, um de \`libc++_shared.so\`, 29 exports \`Java_\`, 96 imports GL, necessidade de GLES1 e dez \`DT_NEEDED\` no módulo do jogo. Esses dados são metadados de inspeção: **nenhum construtor original foi executado**. Uma lista de prioridades local categorizou 18 ações (8 P0, 9 P1 e 1 P2), com barreiras em Bionic, ART/JNI, Cocos2d, assets, transições W^X/RELRO, áudio OpenSL e renderização Mali-G31.
 
 A execução CI **não recebe** o ZIP real e usa um fixture com contagens inventadas para testar o verificador e seus casos negativos. A aprovação do audit é rigorosamente distinta de uma autorização de execução: \`GAME_BOOT_READY=NO\`, \`COMMERCIAL_ENGINE_EXECUTED=NO\`, e qualquer discrepância nos gates ou contagens bloqueia o teste. O relatório não demonstra compatibilidade real da Bionic/ART; não mapeia e não executa \`libMyGame.so\`.
+
+
+## Fase 41 — inicializacao unica de objetos static em C++11 ARM64
+
+O modulo src/cxx_guard41.c implementa um **candidato isolado** para o ABI Itanium C++: operacoes cxa_guard_acquire/release/abort sobre o primeiro byte de um guard de 64 bits, com sincronizacao por mutex e condvar da glibc hospedeira, tabela limitada a 256 guards, detecao de recursao, espera entre threads, abort e nova tentativa. Ha um autoteste no executavel: lenneth-probe --cxx-guard41-selftest.
+
+A suite da nuvem compila uma biblioteca sintetica C++11 separada com uma funcao contendo um objeto static local inicializado dinamicamente. O proprio compilador emite chamadas __cxa_guard_*. O GNU linker redireciona as chamadas para nomes exclusivos __wrap___cxa_guard_* providos pelo host experimental, sem substituir os simbolos do runtime C++ do servidor. Um teste de oito threads valida valor unico e uma unica invocacao de inicializacao; o teste do guard valida espera, recursao, abort e reentrada.
+
+Esses testes exercitam apenas codigo original do laboratorio, executado em Linux AArch64 glibc 2.41. **Nao executam os 196 construtores originais, nao provam o layout de guard da versao Bionic do jogo e nao tornam o motor comercial executavel.** O adapter NAO foi adicionado ao provedor de simbolos da libMyGame.so: a integracao depende da verificacao dos imports reais, TLS e ABI Android. As tabelas phase41_guard.tsv e os logs do CI declaram esse limite explicitamente. R36S so sera necessario para verificacoes que nao podem ser reproduzidas por esse laboratorio.

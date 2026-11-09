@@ -30,7 +30,7 @@ grep -Eq $'^os\tDebian GNU/Linux 13' environment.tsv
 grep -q $'^arch\taarch64' environment.tsv
 grep -q $'^glibc\tglibc 2.41' environment.tsv
 for name in threads fortify cxx fd unicode bionic-data ndk-dl \
-  saveops stdio opensl logging phase17 locale18 phase19 phase20 phase21 \
+  saveops stdio opensl logging cxx-guard41 phase17 locale18 phase19 phase20 phase21 \
   phase22 phase23 startup24 startup25 gles1-probe26 jni27 \
   gles1-context27 gles1-context28 gles1-render29 \
   jni-demand31 jni-contract32 jni-services33 pcm; do
@@ -226,6 +226,42 @@ grep -q '^SOURCE=SYNTHETIC_FIXTURE$' /results/lenneth-startup-summary40.txt
 grep -q 'BIONIC_CPP_CONSTRUCTORS' /results/lenneth-startup-priorities40.tsv
 grep -q 'JNI_ART_CLASSLOADER' /results/lenneth-startup-priorities40.tsv
 printf 'phase40\tPASS\tstartup_metadata_only\n' >> suite.tsv
+# Phase41: independent C++11 ELF compiler-generated guarded static initializer.
+g++ -std=c++11 -O2 -Wall -Wextra -fPIC -shared -fno-exceptions -fno-rtti \
+  -nostdlib -nostartfiles \
+  -Wl,--wrap=__cxa_guard_acquire \
+  -Wl,--wrap=__cxa_guard_release \
+  -Wl,--wrap=__cxa_guard_abort \
+  -o /results/phase41_fixture.so /work/lenneth-r36s/cloud/phase41_guest.cpp
+cc -std=c11 -O2 -Wall -Wextra -Werror -rdynamic -pthread \
+  -I /work/lenneth-r36s/src \
+  -o /results/phase41_host /work/lenneth-r36s/cloud/phase41_host.c \
+  /work/lenneth-r36s/src/cxx_guard41.c -ldl
+readelf -h /results/phase41_fixture.so | grep -q 'Machine:.*AArch64'
+readelf -h /results/phase41_host | grep -q 'Machine:.*AArch64'
+nm -D /results/phase41_fixture.so > /results/phase41_guest_symbols.txt
+nm -D /results/phase41_host > /results/phase41_host_symbols.txt
+for abi in acquire release; do
+  grep -Eq " U __wrap___cxa_guard_$abi$" /results/phase41_guest_symbols.txt
+  grep -Eq " T __wrap___cxa_guard_$abi$" /results/phase41_host_symbols.txt
+done
+timeout 20 /usr/bin/time -f 'peak_rss_kb=%M elapsed=%e' \
+  /results/phase41_host > /results/phase41.log 2>&1 || {
+  cat /results/phase41.log
+  printf 'phase41\tFAIL\tunknown\n' >> suite.tsv
+  exit 51
+}
+grep -q 'PHASE41_CPP_GUARD=PASS' /results/phase41.log
+grep -q 'static_init_calls=1' /results/phase41.log
+grep -q 'GUARD_SELFTEST=PASS' /results/phase41.log
+grep -q $'COMPILER_GENERATED_CXX_GUARD\tPASS' /results/phase41_guard.tsv
+grep -q $'CONCURRENT_STATIC_INITIALIZER\tPASS' /results/phase41_guard.tsv
+grep -q $'BIONIC_ANDROID_GUARD_LAYOUT\tUNVERIFIED' /results/phase41_guard.tsv
+grep -q $'COMMERCIAL_CONSTRUCTORS\tBLOCKED' /results/phase41_guard.tsv
+rss41=$(grep -o 'peak_rss_kb=[0-9]*' /results/phase41.log | tail -n1 | cut -d= -f2 || true)
+if [ -z "$rss41" ]; then rss41=unknown; fi
+printf 'phase41\tPASS\t%s\n' "$rss41" >> suite.tsv
+rm -f /results/phase41_host /results/phase41_fixture.so
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 36
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS phase38=PASS phase39=PASS phase40=PASS commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 38
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS phase38=PASS phase39=PASS phase40=PASS phase41=PASS commercial_engine=NO\n' "$count" | tee result.txt

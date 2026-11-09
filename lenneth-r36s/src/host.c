@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include "cxx_guard41.h"
 
 /* Independent Linux ARM64 bootstrap. Does not run the commercial game. */
 int lenneth_elf_audit(const char *filename);
@@ -535,6 +536,8 @@ int main(int argc,char **argv) {
         return lenneth_bionic_data_selftest();
     if(argc==2 && strcmp(argv[1],"--cxx-selftest")==0)
         return lenneth_cxx_runtime_selftest();
+    if(argc==2 && strcmp(argv[1],"--cxx-guard41-selftest")==0)
+        return lenneth_guard41_selftest();
     if(argc==4 && strcmp(argv[1],"--execute-lifecycle30")==0)
         return lenneth_synthetic_lifecycle30(argv[2],argv[3]);
     if(argc==4 && strcmp(argv[1],"--execute-synthetic")==0)

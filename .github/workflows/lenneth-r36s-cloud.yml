@@ -11,6 +11,7 @@ on:
       - port/lenneth-phase38-asset-bridge
       - port/lenneth-phase39-elf-dependencies
       - port/lenneth-phase40-startup-readiness
+      - port/lenneth-phase41-cxx-guards
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s-cloud.yml"
@@ -49,6 +50,9 @@ jobs:
           grep -q 'phase38=PASS' cloud-results/result.txt
           grep -q 'phase39=PASS' cloud-results/result.txt
           grep -q 'phase40=PASS' cloud-results/result.txt
+          grep -q 'phase41=PASS' cloud-results/result.txt
+          grep -q 'PHASE41_CPP_GUARD=PASS' cloud-results/phase41.log
+          grep -q $'BIONIC_ANDROID_GUARD_LAYOUT\tUNVERIFIED' cloud-results/phase41_guard.tsv
           grep -q 'PHASE40_STARTUP_TRIAGE=PASS' cloud-results/phase40.log
           grep -q '^GAME_BOOT_READY=NO$' cloud-results/lenneth-startup-summary40.txt
           grep -q 'PHASE39_ELF_DEPENDENCIES=PASS' cloud-results/phase39.log
