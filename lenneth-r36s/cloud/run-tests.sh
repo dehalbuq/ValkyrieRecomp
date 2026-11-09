@@ -104,6 +104,17 @@ grep -q 'nativeFixtureRender.*DECLARED_NATIVE' /results/lenneth-dex-contract35.t
 grep -q 'getAssets.*REFERENCE_ONLY' /results/lenneth-dex-contract35.tsv
 grep -q 'GATE.*EXTERNAL_APK.*NOT_PROVIDED' /results/lenneth-dex-contract35.tsv
 printf 'phase35\tPASS\tmetadata_only\n' >> suite.tsv
+# Phase36: independently authored synthetic DEX/export join, no real APK in CI.
+python3 -B /work/lenneth-r36s/cloud/jni_crosscheck36.py \
+  --selftest --output /results/lenneth-jni-join36.tsv \
+  > /results/phase36.log
+grep -q 'PHASE36_JNI_JOIN=PASS' /results/phase36.log
+grep -q 'match_short=PASS match_long=PASS' /results/phase36.log
+grep -q 'overloads=FAIL_CLOSED' /results/phase36.log
+grep -q 'fixture_only=YES commercial_engine=NO' /results/phase36.log
+grep -q 'AMBIGUOUS_OVERLOAD' /results/lenneth-jni-join36.tsv
+grep -q 'NOT_EXPORTED_BY_LIBMYGAME' /results/lenneth-jni-join36.tsv
+printf 'phase36\tPASS\tmetadata_only\n' >> suite.tsv
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 31
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 32
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS commercial_engine=NO\n' "$count" | tee result.txt

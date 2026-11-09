@@ -26,3 +26,14 @@ O script `cloud/dex_audit35.py` lê no computador os arquivos `classes*.dex` de 
 **Uso local opcional:** `python3 dex_audit35.py /caminho/jogo.apk --output assinaturas-jni.tsv`. Não coloque o APK original no repositório público. Revise o TSV antes de compartilhar. O CI da Fase 35 usa apenas um DEX sintético criado por nosso código e **não comprova assinaturas do APK comercial**. O relatório da nuvem marca `EXTERNAL_APK=NOT_PROVIDED`. Nenhum teste no R36S é necessário nesta fase.
 
 O próximo passo para integrar a versão Android 1.0.7 é confrontar as assinaturas do DEX verdadeiro com a lista de símbolos JNI da biblioteca original, sem subir nenhum arquivo comercial ao CI público.
+
+
+## Fase36: cruzar JNI DEX e exports ELF (metadados locais)
+
+Use o programa `cloud/jni_crosscheck36.py` com o arquivo `assinaturas-jni.tsv` extraído pelo auditor35 e o inventário `lenneth-jni-demand31.tsv` ou o ZIP original de diagnósticos R36S. O programa **não acessa código/arquivos binários comerciais** e não faz upload automático.
+
+Exemplo: `python3 jni_crosscheck36.py --dex assinaturas-jni.tsv --inventory lenneth-r36s-diagnostics.zip --output fase36_cruzamento.tsv`.
+
+Verifica os nomes JNI curtos e longos com a codificação JNI de classes/métodos (incluindo nomes Unicode e underscores). Distingue correspondências exatas, ambiguidade de sobrecargas e declarações nativas sem símbolo `Java_...` nesse módulo. Métodos nativos sem export podem usar `RegisterNatives`, outras bibliotecas, ou não possuir implementação: **não é um veredito**. O relatório da nuvem utiliza SOMENTE fixtures sintéticos, não contém dados do APK real.
+
+Um cruzamento local com os metadados fornecidos mostrou 55 declarações `ACC_NATIVE` no APK, 29 exports `Java_...` na libMyGame.so, 29 correspondências e 26 declarações não exportadas por esse módulo. JNI_OnLoad também está exportado, mas a execução comercial segue bloqueada.

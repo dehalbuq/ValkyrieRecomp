@@ -6,6 +6,7 @@ on:
       - port/lenneth-cloud-lab
       - port/lenneth-phase34-integration
       - port/lenneth-phase35-dex-audit
+      - port/lenneth-phase36-jni-join
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s-cloud.yml"
@@ -39,6 +40,8 @@ jobs:
           grep -q 'CLOUD_DEBIAN13_FINAL=PASS' cloud-results/result.txt
           grep -q 'phase34=PASS' cloud-results/result.txt
           grep -q 'phase35=PASS' cloud-results/result.txt
+          grep -q 'phase36=PASS' cloud-results/result.txt
+          grep -q 'PHASE36_JNI_JOIN=PASS' cloud-results/phase36.log
           grep -q 'PHASE35_DEX_AUDIT=PASS' cloud-results/phase35.log
           grep -q 'GATE.*EXTERNAL_APK.*NOT_PROVIDED' cloud-results/lenneth-dex-contract35.tsv
           grep -q 'JNI_ONLOAD_REGISTER_NATIVES[[:space:]]*PASS' cloud-results/lenneth-jni-integration34.tsv
