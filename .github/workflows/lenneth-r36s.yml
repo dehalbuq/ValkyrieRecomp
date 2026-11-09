@@ -17,6 +17,7 @@ on:
       - port/lenneth-phase39-elf-dependencies
       - port/lenneth-phase40-startup-readiness
       - port/lenneth-phase41-cxx-guards
+      - port/lenneth-phase43-full-link-preflight
     paths:
       - "lenneth-r36s/**"
       - ".github/workflows/lenneth-r36s.yml"
@@ -41,6 +42,8 @@ jobs:
         run: |
           bash -n lenneth-r36s/PortMaster/lenneth-test-launcher.sh
           sh -n "lenneth-r36s/PortMaster/Lenneth Android R36S Test.sh"
+          bash -n lenneth-r36s/PortMaster/phase43-preflight.sh
+          sh -n "lenneth-r36s/PortMaster/Lenneth Fase43 Diagnostico.sh"
 
       - name: Compile independent Linux ARM64 hardware test
         run: |
@@ -54,6 +57,15 @@ jobs:
           ./build-lenneth/lenneth-probe --cxx-guard41-selftest | tee lenneth-cxx-guard41.txt
           grep -q 'GUARD_SELFTEST=PASS' lenneth-cxx-guard41.txt
           grep -q 'commercial_game=NOT_EXECUTED' lenneth-cxx-guard41.txt
+
+      - name: Phase43 verify diagnostic fallback always creates report
+        run: |
+          mkdir -p /tmp/lenneth-phase43-smoke
+          cp lenneth-r36s/PortMaster/phase43-preflight.sh /tmp/lenneth-phase43-smoke/
+          bash /tmp/lenneth-phase43-smoke/phase43-preflight.sh
+          test -s /tmp/lenneth-phase43-smoke/Lenneth_Fase43_DIAGNOSTICOS.tar.gz
+          tar -tzf /tmp/lenneth-phase43-smoke/Lenneth_Fase43_DIAGNOSTICOS.tar.gz | grep -q resumo43.txt
+          grep -q 'PHASE43_END status=SEM_PROBE' /tmp/lenneth-phase43-smoke/Lenneth_Fase43_INICIO.log
 
       - name: Verify read-only ELF audit using an ARM64 system executable
         run: |
