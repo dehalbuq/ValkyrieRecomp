@@ -67,3 +67,14 @@ Classificação conservadora: \`CROSS_ELF_CANDIDATE\` (símbolo coincidente entr
 O CI roda com **duas bibliotecas ARM64 sintéticas**, uma delas importando símbolo disponibilizado, símbolo de propósito sem provedor e símbolo fraco opcional. Os testes recusam ELF malformado e verificam export/DT_NEEDED. O arquivo comercial original permanece totalmente fora do runner.
 
 **Bloqueios ainda reais:** detalhes de relocação/versão de símbolos, Bionic Android versus glibc Linux, serviços Android/ART/Cocos2d reais, assets reais, Mali-G31 e execução do \`JNI_OnLoad\` original. A Fase39 gera o diagnóstico necessário para priorizar compatibilidade, sem alegar que o jogo já inicializa.
+
+
+## Fase 40 — diagnóstico real, priorização e bloqueio fail-closed
+
+O utilitário \`cloud/startup_gate40.py\` lê **somente metadados** dos três arquivos TSV conhecidos em um ZIP de diagnósticos do R36S (ou diretório local): \`lenneth-startup-gates.tsv\`, \`lenneth-phase25-startup-plan.tsv\` e \`lenneth-jni-demand31.tsv\`. Ele compara o inventário \`DT_NEEDED\`, o total de construtores com slots de relocação, as contagens JNI e os bloqueios do runtime e gera \`lenneth-startup-priorities40.tsv\` e \`lenneth-startup-summary40.txt\`.
+
+Uso local: \`py startup_gate40.py --diagnostics .\lenneth-r36s-diagnostics.zip --output .\prioridades40.tsv --summary .\resumo40.txt\`.
+
+Um diagnóstico R36S fornecido pelo usuário indicou 195 slots de construtor de \`libMyGame.so\`, um de \`libc++_shared.so\`, 29 exports \`Java_\`, 96 imports GL, necessidade de GLES1 e dez \`DT_NEEDED\` no módulo do jogo. Esses dados são metadados de inspeção: **nenhum construtor original foi executado**. Uma lista de prioridades local categorizou 18 ações (8 P0, 9 P1 e 1 P2), com barreiras em Bionic, ART/JNI, Cocos2d, assets, transições W^X/RELRO, áudio OpenSL e renderização Mali-G31.
+
+A execução CI **não recebe** o ZIP real e usa um fixture com contagens inventadas para testar o verificador e seus casos negativos. A aprovação do audit é rigorosamente distinta de uma autorização de execução: \`GAME_BOOT_READY=NO\`, \`COMMERCIAL_ENGINE_EXECUTED=NO\`, e qualquer discrepância nos gates ou contagens bloqueia o teste. O relatório não demonstra compatibilidade real da Bionic/ART; não mapeia e não executa \`libMyGame.so\`.

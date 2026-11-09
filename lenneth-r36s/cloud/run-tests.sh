@@ -206,6 +206,26 @@ grep -q $'RELOCATION_AND_SYMBOL_VERSIONS\tUNVERIFIED' /results/lenneth-elf-depen
 grep -q $'COMMERCIAL_ENGINE\tNOT_EXECUTED' /results/lenneth-elf-dependencies39.tsv
 printf 'phase39\tPASS\tELF_metadata_only\n' >> suite.tsv
 rm -f /results/libphase39provider.so /results/libphase39consumer.so
+# Phase40: fail-closed read-only startup blocker triage using synthetic TSV.
+# The user's actual diagnostic ZIP is NOT committed or uploaded to CI.
+python3 -B /work/lenneth-r36s/cloud/startup_gate40.py \
+  --selftest \
+  --output /results/lenneth-startup-priorities40.tsv \
+  --summary /results/lenneth-startup-summary40.txt \
+  > /results/phase40.log || {
+    cat /results/phase40.log
+    printf 'phase40\tFAIL\tmetadata_only\n' >> suite.tsv
+    exit 50
+  }
+grep -q 'PHASE40_STARTUP_TRIAGE=PASS' /results/phase40.log
+grep -q 'incomplete_relocations=DENIED' /results/phase40.log
+grep -q 'missing_jni_gate=DENIED' /results/phase40.log
+grep -q '^GAME_BOOT_READY=NO$' /results/lenneth-startup-summary40.txt
+grep -q '^COMMERCIAL_ENGINE_EXECUTED=NO$' /results/lenneth-startup-summary40.txt
+grep -q '^SOURCE=SYNTHETIC_FIXTURE$' /results/lenneth-startup-summary40.txt
+grep -q 'BIONIC_CPP_CONSTRUCTORS' /results/lenneth-startup-priorities40.tsv
+grep -q 'JNI_ART_CLASSLOADER' /results/lenneth-startup-priorities40.tsv
+printf 'phase40\tPASS\tstartup_metadata_only\n' >> suite.tsv
 count=$(awk -F '\t' '$2=="PASS" {n++} END {print n+0}' suite.tsv)
-test "$count" -eq 35
-printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS phase38=PASS phase39=PASS commercial_engine=NO\n' "$count" | tee result.txt
+test "$count" -eq 36
+printf 'CLOUD_DEBIAN13_FINAL=PASS selftests=%s phase34=PASS phase35=PASS phase36=PASS phase37=PASS phase38=PASS phase39=PASS phase40=PASS commercial_engine=NO\n' "$count" | tee result.txt
