@@ -1,0 +1,51 @@
+name: Lenneth vpl_nx Linux ARM64 platform
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - port/lenneth-vplnx-linux-arm64
+    paths:
+      - "vplnx-r36s/**"
+      - ".github/workflows/vplnx-r36s-platform.yml"
+permissions:
+  contents: read
+jobs:
+  platform-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native AArch64 Linux SDL2/EGL/GLES development dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config libsdl2-dev libgles2-mesa-dev \
+            libegl-dev xvfb mesa-utils file binutils
+      - name: Build native Linux ARM64 backend for vpl_nx
+        run: |
+          set -euo pipefail
+          python3 -m py_compile vplnx-r36s/tools/audit_vplnx_elf.py
+          cmake -S vplnx-r36s -B build-vplnx-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-vplnx-linux --parallel 4
+          file build-vplnx-linux/vplnx-linux-platform-check
+          readelf -h build-vplnx-linux/vplnx-linux-platform-check | grep -q 'Machine:.*AArch64'
+      - name: Exercise Linux EGL/GLES2 context without any game code
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set -euo pipefail
+          timeout 30 xvfb-run -a -s "-screen 0 800x600x24" \
+            ./build-vplnx-linux/vplnx-linux-platform-check > platform.log 2>&1
+          cat platform.log
+          grep -q 'VPLNX_LINUX_PLATFORM=PASS commercial_engine=NOT_EXECUTED' platform.log
+          grep -Eq 'GLES: .*OpenGL ES' platform.log
+      - name: Publish open-source platform binary and non-sensitive logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: vplnx-linux-arm64-platform-only
+          path: |
+            build-vplnx-linux/vplnx-linux-platform-check
+            platform.log
+          if-no-files-found: error
+          retention-days: 14
