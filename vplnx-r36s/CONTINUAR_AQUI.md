@@ -98,8 +98,13 @@ com preservação do arquivo anterior:
   coletar manualmente;
 - proteção contra colisões de nomes quando o relógio do portátil reseta.
 
-**Este checkpoint documental não equivale a uma validação no hardware
-dessa nova proteção**. Sempre verificar o CI da branch depois de mudanças.
+**Validação do mecanismo de snapshots:** o GitHub Actions
+[42906180629](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42906180629)
+concluiu com **SUCCESS** em 10/11/2026, incluindo reexecução, backup de arquivo
+anterior, pacote válido e simulação de teste individual. O ZIP do Teste 5
+inclui seis binários ELF64 AArch64, sem conteúdo do jogo, e foi
+inspecionado depois do build. **Ainda não foi testado o comportamento
+de recuperação após queda de energia no R36S real.**
 
 ## 4. Regras de segurança e compatibilidade
 
@@ -121,9 +126,11 @@ dessa nova proteção**. Sempre verificar o CI da branch depois de mudanças.
 
 ## 5. Próximas tarefas em ordem recomendada
 
-1. **Validar CI da mudança de snapshots** e testar um ZIP no R36S somente
-   quando houver algo novo para aprender. Conferir se mantém backup válido
-   mesmo após interrupção abrupta.
+1. **CI dos snapshots aprovado** (run 42906180629). Próximo teste com
+   o pacote Teste 5 no R36S deve confirmar que `DIAGNOSTICOS.tar.gz`
+   sobrevive a reinicialização forçada e que `DIAGNOSTICOS_ANTERIOR.tar.gz`
+   conserva a execução anterior; não reiniciar propositalmente durante
+   teste comercial, e manter a pasta detalhada se houver dúvida.
 2. **Recuperar ELF_REAL_IMPORTS.log completo**, preferencialmente por ZIP
    gerado com snapshots atômicos ou copiando a pasta detalhada depois da
    execução. Determinar imports que bloqueiam cada módulo e contagens novas.
@@ -152,6 +159,7 @@ de continuar. Não supor acesso a este chat.
 - [Código ativo neste ramo](https://github.com/dehalbuq/ValkyrieRecomp/tree/port/lenneth-vplnx-linux-arm64-loader/vplnx-r36s)
 - [Workflow de compilação ARM64](https://github.com/dehalbuq/ValkyrieRecomp/actions/workflows/vplnx-r36s-platform.yml)
 - [CI aprovado, etapa Teste 4 POSIX (antes dos snapshots)](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42895373964)
+- [CI aprovado, Teste 5 com snapshots e backup automático](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42906180629)
 - [Código upstream MIT vpl_nx](https://github.com/delsonazevedo/vpl_nx)
 
 **Checklist de encerramento de cada sessão:** atualizar este estado,
