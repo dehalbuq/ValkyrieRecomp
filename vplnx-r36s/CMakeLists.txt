@@ -17,3 +17,13 @@ target_link_libraries(vplnx-linux-platform PUBLIC
 add_executable(vplnx-linux-platform-check src/platform_smoke.c)
 target_compile_options(vplnx-linux-platform-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-platform-check PRIVATE vplnx-linux-platform)
+
+
+# Android AArch64 ELF interoperability layer, derived from vpl_nx requirements.
+# No game binaries are downloaded or linked into these public build targets.
+add_library(vplnx-linux-elf STATIC src/elf_linux.c)
+target_include_directories(vplnx-linux-elf PUBLIC src)
+target_compile_options(vplnx-linux-elf PRIVATE -Wall -Wextra -Werror)
+add_executable(vplnx-linux-elf-check src/elf_check.c)
+target_compile_options(vplnx-linux-elf-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-linux-elf-check PRIVATE vplnx-linux-elf)
