@@ -4,6 +4,7 @@
  * to glibc: those Android Bionic object layouts are not ABI-compatible.
  */
 #define _GNU_SOURCE 1
+extern void __stack_chk_fail(void) __attribute__((noreturn));
 #include "host_imports_linux.h"
 #include "assets_linux.h"
 #include "bionic_pthread_linux.h"
@@ -20,6 +21,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <time.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sched.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <wchar.h>
+#include <wctype.h>
 
 static int *android_errno(void) {
     return &errno;
@@ -127,8 +138,32 @@ static const Import native_imports[] = {
     FN_SELF(strncat), FN_SELF(isalnum), FN_SELF(isalpha),
     FN_SELF(isspace), FN_SELF(tolower), FN_SELF(toupper),
     FN_SELF(rand), FN_SELF(srand),
+    /* Straight, scalar/byte-buffer LP64 Linux/Bionic ABI-compatible calls.
+     * fopen/FILE*, pthread_create/pthread_t and stat layouts remain BLOCKED. */
+    FN_SELF(time), FN_SELF(clock_gettime), FN_SELF(clock_nanosleep),
+    FN_SELF(gettimeofday), FN_SELF(nanosleep), FN_SELF(usleep),
+    FN_SELF(sched_yield),
+    FN_SELF(read), FN_SELF(write), FN_SELF(close), FN_SELF(lseek),
+    FN_SELF(open), FN_SELF(rename), FN_SELF(remove), FN_SELF(mkdir),
+    FN_SELF(getenv), FN_SELF(getpid), FN_SELF(gettid),
+    FN_SELF(getpriority), FN_SELF(setpriority), FN_SELF(sysconf),
+    FN_SELF(abort), FN_SELF(qsort), FN_SELF(posix_memalign),
+    FN_SELF(strtoll), FN_SELF(strtof),
+    FN_SELF(snprintf), FN_SELF(vsnprintf),
+    FN_SELF(sscanf), FN_SELF(vsscanf),
+    FN_SELF(printf), FN_SELF(sprintf), FN_SELF(vsprintf),
+    FN_SELF(strerror), FN_SELF(div),
+    FN_SELF(isxdigit), FN_SELF(islower), FN_SELF(isupper),
+    FN_SELF(wcslen), FN_SELF(wmemchr), FN_SELF(wmemcpy),
+    FN_SELF(wmemmove), FN_SELF(wmemcmp), FN_SELF(wmemset),
+    FN_SELF(iswcntrl), FN_SELF(iswpunct), FN_SELF(iswdigit),
+    FN_SELF(iswupper), FN_SELF(iswblank), FN_SELF(iswprint),
+    FN_SELF(iswlower), FN_SELF(iswalpha), FN_SELF(iswspace),
+    FN_SELF(iswxdigit), FN_SELF(towlower), FN_SELF(towupper),
 
 
+
+    FN("__stack_chk_fail",__stack_chk_fail),
     FN("__errno",android_errno),
     FN("__memcpy_chk",android_memcpy_chk),
     FN("__memmove_chk",android_memmove_chk),
@@ -260,11 +295,13 @@ int vpl_linux_host_selftest(void) {
         "AAssetManager_open","AAsset_read","AAsset_openFileDescriptor64",
         "slCreateEngine","SL_IID_ENGINE","SL_IID_PLAY","glClear","glTexImage2D",
         "atan2f","strtod","memchr","glMapBufferOES","glDeleteFramebuffers",
-        "pthread_mutex_lock","pthread_cond_wait","pthread_mutexattr_settype"
+        "pthread_mutex_lock","pthread_cond_wait","pthread_mutexattr_settype",
+        "time","clock_gettime","nanosleep","read","write","close",
+        "posix_memalign","snprintf","sscanf","__stack_chk_fail"
     };
     const char *forbidden[] = {
         "pthread_create","pthread_rwlock_init","fopen","fread","fclose",
-        "opendir","stat","system","dlopen","unknown_android_symbol",
+        "opendir","stat","fopen","system","dlopen","unknown_android_symbol",
         "ExecuteProgram","__stack_chk_guard"
     };
     VplHostStats stats={0};
