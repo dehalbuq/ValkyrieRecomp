@@ -149,7 +149,16 @@ AAssetDir *AAssetManager_openDir_fake(AAssetManager *mgr,const char *name) {
     AAssetDir *result=calloc(1,sizeof(*result));
     if(!result) {closedir(dir);return NULL;}
     result->dir=dir;
-    if(*path) snprintf(result->prefix,sizeof(result->prefix),"%s/",path);
+    if(*path) {
+        size_t n=strlen(path);
+        if(n+1 >= sizeof(result->prefix)) {
+            AAssetDir_close_fake(result);
+            return NULL;
+        }
+        memcpy(result->prefix,path,n);
+        result->prefix[n]='/';
+        result->prefix[n+1]='\0';
+    }
     return result;
 }
 const char *AAssetDir_getNextFileName_fake(AAssetDir *ad) {
