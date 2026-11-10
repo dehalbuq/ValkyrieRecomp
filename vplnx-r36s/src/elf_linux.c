@@ -197,8 +197,9 @@ uintptr_t vpl_elf_find_export(const VplElf *m, const char *name) {
     return 0;
 }
 
-int vpl_elf_link(VplElf *m, const VplElf *partner, FILE *log,
-                 char *err, size_t errsize) {
+int vpl_elf_link_host(VplElf *m, const VplElf *partner,
+                      VplHostResolver host, void *host_context, FILE *log,
+                      char *err, size_t errsize) {
     if (!m || !m->file || m->prepared) {
         error_set(err,errsize,"module missing or already linked");return -1;
     }
@@ -262,6 +263,10 @@ int vpl_elf_link(VplElf *m, const VplElf *partner, FILE *log,
                     error_set(err,errsize,"invalid import symbol name");return -1;
                 }
                 value=vpl_elf_find_export(partner,name);
+                if (!value && host) {
+                    value=host(name,host_context);
+                    if (value) m->reloc_host_resolved++;
+                }
                 if (!value) {
                     m->reloc_unresolved++;
                     if (log && m->reloc_unresolved<=20)
@@ -275,12 +280,19 @@ int vpl_elf_link(VplElf *m, const VplElf *partner, FILE *log,
     }
     m->prepared=1;
     if (log)
-        fprintf(log, "%s: mapped=%zu relative=%zu resolved=%zu unresolved=%zu unsupported=%zu relr=%zu\n",
+        fprintf(log, "%s: mapped=%zu relative=%zu resolved=%zu host_resolved=%zu unresolved=%zu unsupported=%zu relr=%zu\n",
             m->label,m->memory_size,m->reloc_relative,m->reloc_resolved,
-            m->reloc_unresolved,m->reloc_unsupported,m->relr_unhandled);
+            m->reloc_host_resolved,m->reloc_unresolved,m->reloc_unsupported,m->relr_unhandled);
     /* Preflight remains successful even with missing host Bionic providers.
        vpl_elf_protect() refuses to finalize any incomplete linkage. */
     return 0;
+}
+
+/* Retain the old API for isolated ELF tests with intentionally unresolved
+ * Android imports. Tests use vpl_elf_link_host for the complete host route. */
+int vpl_elf_link(VplElf *m, const VplElf *partner, FILE *log,
+                 char *err, size_t errsize) {
+    return vpl_elf_link_host(m,partner,NULL,NULL,log,err,errsize);
 }
 
 int vpl_elf_protect(VplElf *m, char *err, size_t errsize) {
