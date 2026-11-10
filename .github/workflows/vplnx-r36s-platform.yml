@@ -21,7 +21,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build pkg-config libsdl2-dev libgles2-mesa-dev \
-            libegl-dev xvfb xauth mesa-utils file binutils
+            libegl-dev xvfb xauth mesa-utils file binutils zip unzip
       - name: Build native Linux ARM64 backend for vpl_nx
         run: |
           set -euo pipefail
@@ -193,6 +193,58 @@ jobs:
           grep -q 'BIONIC_HOST_LINK=BLOCKED' bionic-host-blocked.log
           grep -q 'MEMORY_PROTECTION=BLOCKED' bionic-host-blocked.log
           grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-host-blocked.log
+      - name: Ensure R36S diagnostic creates logs before any native binary is present
+        run: |
+          set -euo pipefail
+          sh -n vplnx-r36s/PortMaster/run-r36s-diagnostico.sh
+          sh -n "vplnx-r36s/PortMaster/VPLNX R36S Diagnostico.sh"
+          mkdir -p /tmp/vplnx-r36s-smoke
+          cp vplnx-r36s/PortMaster/run-r36s-diagnostico.sh /tmp/vplnx-r36s-smoke/
+          (cd /tmp && /bin/sh /tmp/vplnx-r36s-smoke/run-r36s-diagnostico.sh)
+          test -s /tmp/vplnx-r36s-smoke/VPLNX_R36S_INICIO.log
+          test -s /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS.tar.gz
+          tar -tzf /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS.tar.gz | grep -q '/resumo.txt'
+          tar -xOzf /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS.tar.gz \
+            --wildcards '*/resumo.txt' | grep -q 'STATUS=BINARIOS_AUSENTES'
+          echo "R36S_FAILSAFE_LOGS=PASS"
+
+      - name: Assemble complete R36S Ports diagnostic zip without commercial files
+        run: |
+          set -euo pipefail
+          mkdir -p r36s-pkg/ports/vplnx-r36s/bin
+          for f in platform audio jni elf host; do
+            install -m755 "build-vplnx-linux/vplnx-linux-$f-check" \
+              "r36s-pkg/ports/vplnx-r36s/bin/vplnx-linux-$f-check"
+          done
+          install -m755 vplnx-r36s/PortMaster/run-r36s-diagnostico.sh \
+            r36s-pkg/ports/vplnx-r36s/run-r36s-diagnostico.sh
+          install -m755 "vplnx-r36s/PortMaster/VPLNX R36S Diagnostico.sh" \
+            "r36s-pkg/ports/VPLNX R36S Diagnostico.sh"
+          install -m644 vplnx-r36s/PortMaster/LEIA-ME-R36S-PTBR.txt \
+            r36s-pkg/ports/vplnx-r36s/LEIA-ME-R36S-PTBR.txt
+          if find r36s-pkg -type f \( -name 'libMyGame.so' \
+              -o -name 'libc++_shared.so' -o -name 'libRMS.so' \
+              -o -name '*.cpk' \) | grep -q .; then
+              echo 'ERROR: proprietary game data in diagnostics package'
+              exit 1
+          fi
+          (cd r36s-pkg && zip -qr ../VPLNX-R36S-DIAGNOSTICO-ARM64.zip ports)
+          unzip -Z -1 VPLNX-R36S-DIAGNOSTICO-ARM64.zip | tee r36s-package-list.txt
+          grep -q 'ports/vplnx-r36s/bin/vplnx-linux-host-check' r36s-package-list.txt
+          grep -q 'ports/VPLNX R36S Diagnostico.sh' r36s-package-list.txt
+          for f in r36s-pkg/ports/vplnx-r36s/bin/*; do
+            file "$f" | grep -q 'ARM aarch64'
+          done
+          sha256sum VPLNX-R36S-DIAGNOSTICO-ARM64.zip | tee r36s-package-sha256.txt
+          ls -lh VPLNX-R36S-DIAGNOSTICO-ARM64.zip
+
+      - name: Publish PortMaster R36S installation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: VPLNX-R36S-DIAGNOSTICO-ARM64
+          path: VPLNX-R36S-DIAGNOSTICO-ARM64.zip
+          if-no-files-found: error
+          retention-days: 14
       - name: Publish open-source platform binary and non-sensitive logs
         uses: actions/upload-artifact@v4
         with:
