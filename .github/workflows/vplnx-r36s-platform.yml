@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - port/lenneth-vplnx-linux-arm64
+      - port/lenneth-vplnx-linux-arm64-loader
     paths:
       - "vplnx-r36s/**"
       - ".github/workflows/vplnx-r36s-platform.yml"
