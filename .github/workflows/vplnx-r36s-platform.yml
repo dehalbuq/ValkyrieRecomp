@@ -96,6 +96,25 @@ jobs:
             | tee elf-blocked.log
           grep -q 'NEXT_GATE=BLOCKED_MISSING_HOST_OR_JNI_SERVICES' elf-blocked.log
           grep -q 'COMMERCIAL_ENGINE=NOT_EXECUTED' elf-blocked.log
+      - name: Linux Android assets bridge - 350 MB sparse CPK streaming, traversal denial
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vplnx-assets/nested
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("/tmp/vplnx-assets/discData.cpk")
+          with p.open("wb") as f:
+              f.seek(350_000_000)
+              f.write(b"CPK!")
+          Path("/tmp/vplnx-assets/nested/ok.txt").write_bytes(b"OK")
+          PY
+          ln -s /etc/passwd /tmp/vplnx-assets/link-passwd
+          ln -s /etc /tmp/vplnx-assets/link-dir
+          ./build-vplnx-linux/vplnx-linux-assets-check /tmp/vplnx-assets \
+            | tee assets-stream.log
+          grep -q 'VPLNX_ASSET_STREAM=PASS' assets-stream.log
+          grep -q 'symlink_denial=PASS traversal_denial=PASS' assets-stream.log
+          grep -q 'commercial_assets=NONE' assets-stream.log
       - name: Publish open-source platform binary and non-sensitive logs
         uses: actions/upload-artifact@v4
         with:
@@ -105,5 +124,6 @@ jobs:
             platform.log
             elf-integration.log
             elf-blocked.log
+            assets-stream.log
           if-no-files-found: error
           retention-days: 14
