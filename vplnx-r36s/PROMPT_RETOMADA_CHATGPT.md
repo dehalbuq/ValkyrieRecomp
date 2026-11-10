@@ -53,8 +53,11 @@ inspecione **todo o conteúdo**, inclusive `execucao.txt`,
   ficar vazio depois de interrupção/reinicialização. Foi implementada
   coleta por snapshots atômicos depois de cada teste, backup
   `VPLNX_R36S_DIAGNOSTICOS_ANTERIOR.tar.gz` e proteção contra
-  colisões causadas pela data do sistema errada. Verificar CI/efeito
-  no hardware antes de declarar isso aprovado no R36S.
+  colisões causadas pela data do sistema errada.
+  A CI **42906180629 PASSOU** para compilação ARM64, snapshots/backup
+  e empacotamento: https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42906180629 .
+  Pacote gerado: **Teste 5, logs resilientes**. Ainda NÃO houve validação
+  da recuperação após desligamento abrupto no R36S real.
 - O código não publica nem baixa bibliotecas/ROM/CPK comerciais.
 - **O vpl_nx é um wrapper Android e não um novo motor totalmente livre.**
 - O APK Android do usuário não é binariamente idêntico ao do Switch:
