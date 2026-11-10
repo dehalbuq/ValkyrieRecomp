@@ -36,3 +36,15 @@ target_compile_options(vplnx-linux-assets PRIVATE -Wall -Wextra -Werror)
 add_executable(vplnx-linux-assets-check src/assets_check.c)
 target_compile_options(vplnx-linux-assets-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-assets-check PRIVATE vplnx-linux-assets)
+
+
+# Real MIT vpl_nx OpenSL ES 1.0.1 / SDL2 implementation, with Linux config shim.
+# Independent fixture sends silence only and does not touch game binaries.
+add_library(vplnx-linux-opensles STATIC
+    upstream/opensles.c upstream/linux_audio_compat.c)
+target_include_directories(vplnx-linux-opensles PUBLIC upstream)
+target_compile_options(vplnx-linux-opensles PRIVATE -Wall -Wextra)
+target_link_libraries(vplnx-linux-opensles PUBLIC PkgConfig::SDL2 m)
+add_executable(vplnx-linux-audio-check src/audio_check.c)
+target_compile_options(vplnx-linux-audio-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-linux-audio-check PRIVATE vplnx-linux-opensles)
