@@ -179,10 +179,10 @@ jobs:
           grep -q 'MEMORY_PROTECTION=PASS W_X=ENFORCED' bionic-host-linked.log
           grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-host-linked.log
           cat > /tmp/vplnx-bionic-unsafe.c <<'EOF'
-          extern int pthread_mutex_lock(void *);
+          extern int pthread_create(void *,const void *,void *(*)(void *),void *);
           int JNI_OnLoad(void *vm,void *u) {
               (void)vm;(void)u;
-              return pthread_mutex_lock((void *)0);
+              return pthread_create((void *)0,(void *)0,(void *)0,(void *)0);
           }
           EOF
           cc -shared -fPIC -nostdlib -Wl,-z,now \
@@ -193,6 +193,36 @@ jobs:
           grep -q 'BIONIC_HOST_LINK=BLOCKED' bionic-host-blocked.log
           grep -q 'MEMORY_PROTECTION=BLOCKED' bionic-host-blocked.log
           grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-host-blocked.log
+      - name: Android LP64 40/48-byte mutex and cond ABI bridge regression
+        run: |
+          set -euo pipefail
+          ./build-vplnx-linux/vplnx-bionic-pthread-check | tee bionic-pthread.log
+          grep -q 'BIONIC_PTHREAD_ABI=PASS guest_mutex_bytes=40 guest_cond_bytes=48' bionic-pthread.log
+          grep -q 'BIONIC_PTHREAD_LIFECYCLE=PASS' bionic-pthread.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-pthread.log
+          cat > /tmp/vplnx-guest-mutex.c <<'EOF'
+          struct android_mutex { unsigned state; char reserved[36]; };
+          struct android_cond { unsigned state; char reserved[44]; };
+          extern int pthread_mutex_lock(struct android_mutex *);
+          extern int pthread_mutex_unlock(struct android_mutex *);
+          extern int pthread_cond_signal(struct android_cond *);
+          static struct android_mutex mutex;
+          static struct android_cond cond;
+          int JNI_OnLoad(void *vm,void *unused) {
+              (void)vm; (void)unused;
+              /* Synthetic ELF only, never executed by link validator. */
+              return pthread_mutex_lock(&mutex)+pthread_cond_signal(&cond)+
+                     pthread_mutex_unlock(&mutex);
+          }
+          EOF
+          cc -shared -fPIC -nostdlib -Wl,-z,now \
+            -o /tmp/vplnx-guest-mutex.so /tmp/vplnx-guest-mutex.c
+          ./build-vplnx-linux/vplnx-linux-host-check \
+            /tmp/vplnx-guest-mutex.so /tmp/vplnx-bionic-partner.so \
+            | tee bionic-pthread-imports.log
+          grep -q 'BIONIC_HOST_LINK=PASS' bionic-pthread-imports.log
+          grep -Eq 'host_slots=[1-9][0-9]*' bionic-pthread-imports.log
+
       - name: Ensure R36S diagnostic creates logs before any native binary is present
         run: |
           set -euo pipefail
@@ -216,6 +246,8 @@ jobs:
             install -m755 "build-vplnx-linux/vplnx-linux-$f-check" \
               "r36s-pkg/ports/vplnx-r36s/bin/vplnx-linux-$f-check"
           done
+          install -m755 build-vplnx-linux/vplnx-bionic-pthread-check \
+            r36s-pkg/ports/vplnx-r36s/bin/vplnx-bionic-pthread-check
           install -m755 vplnx-r36s/PortMaster/run-r36s-diagnostico.sh \
             r36s-pkg/ports/vplnx-r36s/run-r36s-diagnostico.sh
           install -m755 "vplnx-r36s/PortMaster/VPLNX R36S Diagnostico.sh" \
@@ -231,6 +263,7 @@ jobs:
           (cd r36s-pkg && zip -qr ../VPLNX-R36S-DIAGNOSTICO-ARM64.zip ports)
           unzip -Z -1 VPLNX-R36S-DIAGNOSTICO-ARM64.zip | tee r36s-package-list.txt
           grep -q 'ports/vplnx-r36s/bin/vplnx-linux-host-check' r36s-package-list.txt
+          grep -q 'ports/vplnx-r36s/bin/vplnx-bionic-pthread-check' r36s-package-list.txt
           grep -q 'ports/VPLNX R36S Diagnostico.sh' r36s-package-list.txt
           for f in r36s-pkg/ports/vplnx-r36s/bin/*; do
             file "$f" | grep -q 'ARM aarch64'
@@ -260,5 +293,7 @@ jobs:
             bionic-host-selftest.log
             bionic-host-linked.log
             bionic-host-blocked.log
+            bionic-pthread.log
+            bionic-pthread-imports.log
           if-no-files-found: error
           retention-days: 14
