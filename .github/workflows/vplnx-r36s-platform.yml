@@ -115,6 +115,16 @@ jobs:
           grep -q 'VPLNX_ASSET_STREAM=PASS' assets-stream.log
           grep -q 'symlink_denial=PASS traversal_denial=PASS' assets-stream.log
           grep -q 'commercial_assets=NONE' assets-stream.log
+      - name: Ported vpl_nx OpenSL ES SDL2 mixer - dummy audio AArch64
+        env:
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set -euo pipefail
+          timeout 30 ./build-vplnx-linux/vplnx-linux-audio-check > audio-opensles.log 2>&1
+          cat audio-opensles.log
+          grep -q 'VPLNX_OPENSL=PASS' audio-opensles.log
+          grep -q 'callback_drained=1' audio-opensles.log
+          grep -q 'commercial_engine=NO' audio-opensles.log
       - name: Publish open-source platform binary and non-sensitive logs
         uses: actions/upload-artifact@v4
         with:
@@ -125,5 +135,6 @@ jobs:
             elf-integration.log
             elf-blocked.log
             assets-stream.log
+            audio-opensles.log
           if-no-files-found: error
           retention-days: 14
