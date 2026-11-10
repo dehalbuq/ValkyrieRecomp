@@ -9,22 +9,50 @@ mkdir -p "$BASE/diagnosticos" 2>/dev/null || exit 2
 echo "INICIO=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo sem-data)" > "$BASE/VPLNX_R36S_INICIO.log"
 STAMP="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo manual)"
 D="$BASE/diagnosticos"
-RUN="$D/execucao-$STAMP-$$"
+# Hardware clocks can reset (e.g., to 2025) on reboot. Do not overwrite a
+# prior run even if the clock and PID happen to repeat.
+RUN_BASE="$D/execucao-$STAMP-$"
+RUN="$RUN_BASE"
+RUN_INDEX=0
+while [ -e "$RUN" ]; do
+    RUN_INDEX=$((RUN_INDEX + 1))
+    if [ "$RUN_INDEX" -gt 1000 ]; then exit 2; fi
+    RUN="$RUN_BASE-$RUN_INDEX"
+done
 mkdir -p "$RUN" || exit 2
 LOG="$RUN/execucao.txt"
 exec >> "$LOG" 2>&1
 printf 'VPLNX_R36S_DIAGNOSTICO_V1=START\n'
 printf 'base=%s\n' "$BASE"
 printf 'COMMERCIAL_ENGINE=NOT_EXECUTED\nRMS=NOT_EXECUTED\n'
-STATUS="FINISHED"
+STATUS="EM_EXECUCAO"
+ARCHIVE="$BASE/VPLNX_R36S_DIAGNOSTICOS.tar.gz"
+BACKUP="$BASE/VPLNX_R36S_DIAGNOSTICOS_ANTERIOR.tar.gz"
+# Always preserve the last good archive before starting a new session.
+# A reboot or crash must not turn a previously complete report into 0 bytes.
+if [ -s "$ARCHIVE" ] && tar -tzf "$ARCHIVE" >/dev/null 2>&1; then
+    cp -p "$ARCHIVE" "$BACKUP" 2>>"$BASE/VPLNX_R36S_INICIO.log" || true
+fi
+
+snapshot() {
+    # Never write directly to the published .tar.gz: write, validate, THEN
+    # atomically rename. SIGKILL/power loss can interrupt tar mid-write.
+    SNAP_TMP="$BASE/.vplnx-diagnostico-$.tmp"
+    printf 'STATUS=%s\nRUN=%s\n' "$STATUS" "$(basename "$RUN")" > "$RUN/resumo.txt"
+    if tar -czf "$SNAP_TMP" -C "$D" "$(basename "$RUN")" 2>>"$BASE/VPLNX_R36S_INICIO.log" &&
+       [ -s "$SNAP_TMP" ] && tar -tzf "$SNAP_TMP" >/dev/null 2>&1 &&
+       mv -f "$SNAP_TMP" "$ARCHIVE"; then
+        : # Keep the newest validated snapshot, even during an interrupted run.
+    else
+        echo "SNAPSHOT_FALHOU; ultimo arquivo valido preservado" >> "$BASE/VPLNX_R36S_INICIO.log"
+        rm -f "$SNAP_TMP" 2>/dev/null || true
+        cp "$LOG" "$BASE/VPLNX_R36S_ERRO_COLETA.log" 2>/dev/null || true
+    fi
+}
 finish() {
     echo "FINAL=$STATUS" >> "$LOG"
     echo "COMMERCIAL_ENGINE=NOT_EXECUTED" >> "$LOG"
-    printf 'STATUS=%s\nRUN=%s\n' "$STATUS" "$(basename "$RUN")" > "$RUN/resumo.txt"
-    # Include only diagnostic text; never include .so files or game assets.
-    tar -czf "$BASE/VPLNX_R36S_DIAGNOSTICOS.tar.gz" -C "$D" "$(basename "$RUN")" 2>>"$BASE/VPLNX_R36S_INICIO.log" || {
-        cp "$LOG" "$BASE/VPLNX_R36S_ERRO_COLETA.log" 2>/dev/null || true
-    }
+    snapshot
     printf 'ULTIMA_EXECUCAO=%s\nSTATUS=%s\n' "$(basename "$RUN")" "$STATUS" >> "$BASE/VPLNX_R36S_INICIO.log"
 }
 trap 'finish' 0
@@ -76,8 +104,12 @@ run_case() {
     printf '%s\t%s\t%s\n' "$NAME" "$RESULTADO" "$RC" >> "$RUN/resultados.tsv"
     # Full diagnostics remain in tar.gz; avoid printing hundreds of imports.
     tail -n 7 "$OUT" 2>/dev/null || true
+    # Save a verified partial archive after EACH test; a reboot cannot erase
+    # everything just because the last ELF check was in progress.
+    snapshot
 }
 printf 'teste\tstatus\tcodigo\n' > "$RUN/resultados.tsv"
+snapshot
 for f in vplnx-linux-platform-check vplnx-linux-audio-check vplnx-linux-jni-check vplnx-linux-host-check vplnx-linux-elf-check vplnx-bionic-pthread-check; do
     if [ -f "$BIN/$f" ]; then
         chmod +x "$BIN/$f" 2>/dev/null || true
@@ -158,5 +190,6 @@ else
     echo "PRIVATE_LIBRARIES=SKIPPED; expected private/ or ports/lenneth-fase42/"
 fi
 
-echo "DIAGNOSTIC_PACKAGE=$BASE/VPLNX_R36S_DIAGNOSTICOS.tar.gz"
+STATUS="FINISHED"
+echo "DIAGNOSTIC_PACKAGE=$ARCHIVE"
 echo "VPLNX_R36S_DIAGNOSTICO_V1=END"
