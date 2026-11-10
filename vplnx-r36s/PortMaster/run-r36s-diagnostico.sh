@@ -59,18 +59,22 @@ fi
 
 run_case() {
     NAME="$1"
-    shift
+    EXPECTED="$2"
+    shift 2
     OUT="$RUN/$NAME.log"
     echo "== $NAME =="
-    if timeout 18 "$@" > "$OUT" 2>&1; then
-        echo "$NAME=PASS"
-        printf '%s\tPASS\t0\n' "$NAME" >> "$RUN/resultados.tsv"
+    RC=0
+    timeout 18 "$@" > "$OUT" 2>&1 || RC=$?
+    if [ "$RC" -eq 0 ] && grep -Fq "$EXPECTED" "$OUT"; then
+        RESULTADO="PASS"
+    elif [ "$RC" -eq 0 ] && grep -Eq 'BIONIC_HOST_LINK=BLOCKED|NEXT_GATE=BLOCKED_' "$OUT"; then
+        RESULTADO="BLOCKED"
     else
-        RC=$?
-        echo "$NAME=FALHOU_RC_$RC"
-        printf '%s\tFALHA\t%s\n' "$NAME" "$RC" >> "$RUN/resultados.tsv"
+        RESULTADO="FALHA"
     fi
-    # Show only a summary on-screen; detailed logs remain in .tar.gz
+    echo "$NAME=$RESULTADO codigo=$RC"
+    printf '%s\t%s\t%s\n' "$NAME" "$RESULTADO" "$RC" >> "$RUN/resultados.tsv"
+    # Full diagnostics remain in tar.gz; avoid printing hundreds of imports.
     tail -n 7 "$OUT" 2>/dev/null || true
 }
 printf 'teste\tstatus\tcodigo\n' > "$RUN/resultados.tsv"
@@ -83,7 +87,7 @@ for f in vplnx-linux-platform-check vplnx-linux-audio-check vplnx-linux-jni-chec
 done
 
 if [ -x "$BIN/vplnx-linux-host-check" ]; then
-    run_case HOST_SAFE "$BIN/vplnx-linux-host-check" --host-selftest
+    run_case HOST_SAFE 'BIONIC_HOST_SELFTEST=PASS' "$BIN/vplnx-linux-host-check" --host-selftest
 else
     echo "HOST_SAFE=SKIP_SEM_EXECUTAVEL"
 fi
@@ -91,17 +95,25 @@ fi
 # Platform check draws a blank 640x480 EGL surface for ~2 seconds.
 # The GPU/driver printed here must identify hardware to confirm acceleration.
 if [ -x "$BIN/vplnx-linux-platform-check" ]; then
-    run_case GLES2_GPU env SDL_AUDIODRIVER=dummy "$BIN/vplnx-linux-platform-check"
-    run_case GLES3_GPU env SDL_AUDIODRIVER=dummy "$BIN/vplnx-linux-platform-check" --es3
+    run_case GLES2_GPU 'VPLNX_LINUX_PLATFORM=PASS' "$BIN/vplnx-linux-platform-check"
+    run_case GLES3_GPU 'VPLNX_LINUX_PLATFORM=PASS' "$BIN/vplnx-linux-platform-check" --es3
+    # If SDL picked an unsuitable auto video driver, retry explicitly with
+    # KMSDRM. Never spoof success if both attempts fail.
+    if [ -e /dev/dri/card0 ] && ! grep -q 'VPLNX_LINUX_PLATFORM=PASS' "$RUN/GLES2_GPU.log"; then
+        run_case GLES2_KMSDRM 'VPLNX_LINUX_PLATFORM=PASS' env SDL_VIDEODRIVER=kmsdrm "$BIN/vplnx-linux-platform-check"
+    fi
+    if [ -e /dev/dri/card0 ] && ! grep -q 'VPLNX_LINUX_PLATFORM=PASS' "$RUN/GLES3_GPU.log"; then
+        run_case GLES3_KMSDRM 'VPLNX_LINUX_PLATFORM=PASS' env SDL_VIDEODRIVER=kmsdrm "$BIN/vplnx-linux-platform-check" --es3
+    fi
 else
     echo "GLES_GPU=SKIP_SEM_EXECUTAVEL"
 fi
 
 if [ -x "$BIN/vplnx-linux-audio-check" ]; then
-    run_case OPENSL_AUDIO_FISICO "$BIN/vplnx-linux-audio-check"
+    run_case OPENSL_AUDIO_FISICO 'VPLNX_OPENSL=PASS' "$BIN/vplnx-linux-audio-check"
     # Dummy fallback does NOT verify real speakers.
     if ! grep -q '^VPLNX_OPENSL=PASS' "$RUN/OPENSL_AUDIO_FISICO.log" 2>/dev/null; then
-        run_case OPENSL_AUDIO_SIMULADO env SDL_AUDIODRIVER=dummy "$BIN/vplnx-linux-audio-check"
+        run_case OPENSL_AUDIO_SIMULADO 'VPLNX_OPENSL=PASS' env SDL_AUDIODRIVER=dummy "$BIN/vplnx-linux-audio-check"
     fi
 else
     echo "OPENSL_AUDIO=SKIP_SEM_EXECUTAVEL"
@@ -111,7 +123,7 @@ fi
 mkdir -p "$RUN/assets"
 printf 'SYNTHJNI' > "$RUN/assets/sample.bin"
 if [ -x "$BIN/vplnx-linux-jni-check" ]; then
-    run_case JNI_ASSETS "$BIN/vplnx-linux-jni-check" "$RUN/assets"
+    run_case JNI_ASSETS 'VPLNX_JNI_ABI=PASS' "$BIN/vplnx-linux-jni-check" "$RUN/assets"
 else
     echo "JNI_ASSETS=SKIP_SEM_EXECUTAVEL"
 fi
@@ -132,9 +144,9 @@ for CAND in "$BASE/private" "$PARENT/lenneth-fase42" "$PARENT/lenneth-fase42/lib
 done
 if [ -n "$GAME" ] && [ -x "$BIN/vplnx-linux-host-check" ]; then
     echo "PRIVATE_LIBRARIES=FOUND (names only)"
-    run_case ELF_REAL_IMPORTS "$BIN/vplnx-linux-host-check" "$GAME" "$PARTNER"
+    run_case ELF_REAL_IMPORTS 'BIONIC_HOST_LINK=PASS' "$BIN/vplnx-linux-host-check" "$GAME" "$PARTNER"
     if [ -x "$BIN/vplnx-linux-elf-check" ]; then
-        run_case ELF_REAL_BASIC "$BIN/vplnx-linux-elf-check" "$GAME" "$PARTNER"
+        run_case ELF_REAL_BASIC 'NEXT_GATE=READY_FOR_SEPARATE_JNI_ABI_TEST' "$BIN/vplnx-linux-elf-check" "$GAME" "$PARTNER"
     fi
 else
     echo "PRIVATE_LIBRARIES=SKIPPED; expected private/ or ports/lenneth-fase42/"
