@@ -36,6 +36,7 @@
 #define VPL_PACKAGE "com.crunchyroll.gv.valkyrieprofilelenneth.game"
 
 typedef uint32_t juint; /* JNI jint is 32-bit on AArch64 */
+typedef int64_t jlong; /* JNI jlong is 64-bit */
 
 // ---------------------------------------------------------------------------
 // fake object model
@@ -52,7 +53,7 @@ enum {
 typedef struct { uint32_t tag; char label[96]; } FakeObject;   // also FakeClass
 typedef struct { uint32_t tag; char *utf; } FakeString;
 typedef struct { uint32_t tag; int len; void **items; } FakeObjArray;
-typedef struct { uint32_t tag; int len; int elem_size; void *data; } FakePriArray;
+typedef struct { uint32_t tag; int len; int capacity; int elem_size; void *data; } FakePriArray;
 typedef struct { uint32_t tag; char cls[96]; char name[96]; char sig[128]; } FakeID;
 
 volatile int jni_quit_requested = 0;
@@ -112,7 +113,8 @@ void *jni_make_string(const char *utf) {
 static void *make_pri_array_adopt(void *data, int len, int elem_size) {
   FakePriArray *a = calloc(1, sizeof(*a));
   if (!a) { free(data); return NULL; }
-  a->tag = TAG_PRIARR; a->len = len; a->elem_size = elem_size; a->data = data;
+  a->tag = TAG_PRIARR; a->len = len; a->capacity = len;
+  a->elem_size = elem_size; a->data = data;
   return reg_local(a);
 }
 // persistent primitive array for the input pump (NOT a JNI local ref, so it is
@@ -121,7 +123,7 @@ void *jni_make_input_array(int max_len, int elem_size) {
   FakePriArray *a = calloc(1, sizeof(*a));
   if (!a) return NULL;
   if (max_len <= 0 || max_len > 65536 || elem_size <= 0 || elem_size > 8) { free(a); return NULL; }
-  a->tag = TAG_PRIARR; a->len = max_len; a->elem_size = elem_size;
+  a->tag = TAG_PRIARR; a->len = max_len; a->capacity = max_len; a->elem_size = elem_size;
   a->data = calloc(max_len ? max_len : 1, elem_size);
   return a;
 }
@@ -129,7 +131,7 @@ void *jni_make_input_array(int max_len, int elem_size) {
 void jni_input_array_set(void *arr, const void *src, int n) {
   FakePriArray *a = arr;
   if (!a || a->tag != TAG_PRIARR) return;
-  if (n < 0 || n > 65536 || (src == NULL && n)) return;
+  if (n < 0 || n > a->capacity || (src == NULL && n)) return;
   a->len = n;
   if (src && n > 0) memcpy(a->data, src, (size_t)n * a->elem_size);
 }
@@ -301,7 +303,7 @@ static juint call_int(FakeID *id, va_list va) {
   return 0;
 }
 
-static juint call_long(FakeID *id, va_list va) {
+static jlong call_long(FakeID *id, va_list va) {
   (void)va;
   if (DEBUG_LOG) debugPrintf("JNI callLong: unhandled %s.%s\n", id->cls, id->name);
   return 0;
@@ -404,9 +406,12 @@ static void *j_PopLocalFrame(void *env, void *result) {
 CALL_VARIADIC(j_CallObjectMethod, void *, call_object)
 CALL_VARIADIC(j_CallIntMethod, juint, call_int)
 CALL_VARIADIC(j_CallBooleanMethod, juint, call_int)
-CALL_VARIADIC(j_CallLongMethod, juint, call_long)
+CALL_VARIADIC(j_CallLongMethod, jlong, call_long)
 CALL_VARIADIC(j_CallDoubleMethod, double, call_double)
-CALL_VARIADIC(j_CallFloatMethod, double, call_double)
+static float call_float(FakeID *id, va_list va) {
+  return (float)call_double(id, va);
+}
+CALL_VARIADIC(j_CallFloatMethod, float, call_float)
 
 static void j_CallVoidMethod(void *env, void *recv, FakeID *id, ...) {
   (void)env; (void)recv; va_list va; va_start(va, id); call_void(id, va); va_end(va);
