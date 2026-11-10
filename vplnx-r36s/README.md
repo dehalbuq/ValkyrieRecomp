@@ -58,3 +58,35 @@ rasterizer by trying the native Android/Cocos renderer, but no measured gain or
 real-game compatibility on Cortex-A35 has yet been established.
 
 MIT project source: https://github.com/delsonazevedo/vpl_nx
+
+
+## Current Bionic/Linux import bridge: 2026-11-10
+
+CI [ARM64 host integration](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42818884922)
+compiles the Linux platform, ELF loader, asset bridge, OpenSL ES/SDL2, JNI 1.6
+and host import allowlist; tests *synthetic ELF modules only*. The loader's
+allowlisted provider resolves suitable C functions, Android NDK assets, audio,
+and the GLES2 core + OES map-buffer dispatch. Unsupported imports are recorded
+and block executable mapping. Opaque Bionic pthread and FILE layouts are
+**intentionally not forwarded** directly into glibc.
+
+A **private read-only static symbol-name comparison** using the supplied Android
+engine build reported **353 unique undefined symbols in libMyGame.so**:
+- 85 names have corresponding exports in its accompanying libc++_shared.so;
+- 177 other names are present in the Linux host allowlist;
+- 91 names remain without providers (43 POSIX/stdio/file, 20 pthread,
+  20 Bionic/ABI, 7 math/text/format and 1 other, using an approximate
+  classification).
+
+**These are NAME matches, not proven compatible runtime ABIs or executed
+relocations.** Additional imports from libc++_shared.so itself, symbol
+versions, private data symbols, TLS, native constructors, ART/JNI dynamic
+registration, and actual GPU device compatibility still require validation.
+
+Next engineering gates: (1) sandboxed Bionic file/stdio objects and saves,
+(2) guest pthread mutex/cond/TLS object ABI, (3) Bionic C++ and exception/unwind
+lifecycle, (4) test original two library link in a private nonexecuting runner,
+and finally (5) isolated JNI_OnLoad when all compatibility gates pass.
+
+**No modified APK libraries, game assets or third-party loader components
+are stored in this repository or sent to the public CI.**
