@@ -208,10 +208,24 @@ static const Import native_imports[] = {
     FN_SELF(eglGetProcAddress)
 };
 
+/* Record each unique unresolved import once, preserving ELF .dynstr strings
+ * until the command prints its report and unloads the mapped modules. */
+static void note_missing(VplHostStats *stats, const char *symbol) {
+    if (!stats) return;
+    stats->unknown++;
+    if (!symbol || !*symbol) return;
+    for (size_t i=0; i<stats->missing_unique; i++)
+        if (strcmp(stats->missing_names[i],symbol)==0) return;
+    if (stats->missing_unique >= VPL_HOST_MAX_MISSING) {
+        stats->missing_overflow++;
+        return;
+    }
+    stats->missing_names[stats->missing_unique++]=symbol;
+}
 uintptr_t vpl_linux_host_lookup(const char *symbol, void *context) {
     VplHostStats *stats = context;
     if (!symbol || !*symbol) {
-        if (stats) stats->unknown++;
+        note_missing(stats,symbol);
         return 0;
     }
     for (size_t i=0; i<sizeof(native_imports)/sizeof(native_imports[0]); i++)
@@ -219,7 +233,7 @@ uintptr_t vpl_linux_host_lookup(const char *symbol, void *context) {
             if (stats) stats->found++;
             return native_imports[i].addr;
         }
-    if (stats) stats->unknown++;
+    note_missing(stats,symbol);
     return 0;
 }
 int vpl_linux_host_selftest(void) {
