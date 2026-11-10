@@ -10,6 +10,9 @@
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>
 #include <errno.h>
+#include <ctype.h>
+#include <malloc.h>
+#include <strings.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -110,6 +113,20 @@ static const Import native_imports[] = {
     FN_SELF(sqrt), FN_SELF(sqrtf), FN_SELF(fabs), FN_SELF(fabsf),
     FN_SELF(floor), FN_SELF(floorf), FN_SELF(ceil), FN_SELF(ceilf),
     FN_SELF(fmod), FN_SELF(fmodf), FN_SELF(pow), FN_SELF(powf),
+    /* ABI-compatible scalar math, text and allocation functions imported by
+     * this Lenneth build. No opaque structs, process spawning or callbacks. */
+    FN_SELF(acos), FN_SELF(acosf), FN_SELF(asinf),
+    FN_SELF(atan2), FN_SELF(atan2f), FN_SELF(exp2f), FN_SELF(expf),
+    FN_SELF(frexp), FN_SELF(log10), FN_SELF(log10f), FN_SELF(logf),
+    FN_SELF(modf), FN_SELF(tan), FN_SELF(tanf),
+    FN_SELF(sincos), FN_SELF(sincosf),
+    FN_SELF(atof), FN_SELF(strtod), FN_SELF(strtoull),
+    FN_SELF(memchr), FN_SELF(memalign),
+    FN_SELF(strcasecmp), FN_SELF(strcat), FN_SELF(strcpy),
+    FN_SELF(strncat), FN_SELF(isalnum), FN_SELF(isalpha),
+    FN_SELF(isspace), FN_SELF(tolower), FN_SELF(toupper),
+    FN_SELF(rand), FN_SELF(srand),
+
 
     FN("__errno",android_errno),
     FN("__memcpy_chk",android_memcpy_chk),
@@ -209,7 +226,8 @@ int vpl_linux_host_selftest(void) {
     const char *present[] = {
         "malloc","memcpy","__errno","__memcpy_chk","__android_log_write",
         "AAssetManager_open","AAsset_read","AAsset_openFileDescriptor64",
-        "slCreateEngine","SL_IID_ENGINE","SL_IID_PLAY","glClear","glTexImage2D"
+        "slCreateEngine","SL_IID_ENGINE","SL_IID_PLAY","glClear","glTexImage2D",
+        "atan2f","strtod","memchr","glMapBufferOES","glDeleteFramebuffers"
     };
     const char *forbidden[] = {
         "pthread_mutex_lock","pthread_cond_wait","fopen","fread","fclose",
