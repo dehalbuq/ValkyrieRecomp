@@ -78,6 +78,20 @@ static void android_abort_message(const char *msg) {
     if (msg) android_log_write(6,"abort-message",msg);
 }
 
+
+/* GL_OES_mapbuffer is optional: resolve extension dispatch only when an EGL
+ * context exists. No GL calls happen during ELF relocation itself. */
+static void *android_gl_map_buffer_oes(GLenum target, GLenum access) {
+    typedef void *(*MapFn)(GLenum,GLenum);
+    MapFn f=(MapFn)eglGetProcAddress("glMapBufferOES");
+    return f?f(target,access):NULL;
+}
+static GLboolean android_gl_unmap_buffer_oes(GLenum target) {
+    typedef GLboolean (*UnmapFn)(GLenum);
+    UnmapFn f=(UnmapFn)eglGetProcAddress("glUnmapBufferOES");
+    return f?f(target):(GLboolean)0;
+}
+
 typedef struct { const char *name; uintptr_t addr; } Import;
 #define FN(sym, target) { sym, (uintptr_t)&target }
 #define FN_SELF(name) FN(#name, name)
@@ -143,6 +157,37 @@ static const Import native_imports[] = {
     FN_SELF(glTexImage2D), FN_SELF(glTexParameteri), FN_SELF(glTexSubImage2D),
     FN_SELF(glBindBuffer), FN_SELF(glGenBuffers), FN_SELF(glBufferData),
     FN_SELF(glBufferSubData), FN_SELF(glDrawArrays), FN_SELF(glDrawElements),
+
+    /* Exact GLES2 symbols imported by this build of Lenneth; explicitly
+     * enumerated rather than resolving arbitrary addresses via dlsym(). */
+    FN_SELF(glBindAttribLocation), FN_SELF(glBindFramebuffer),
+    FN_SELF(glBindRenderbuffer), FN_SELF(glBlendEquation),
+    FN_SELF(glCheckFramebufferStatus), FN_SELF(glClearDepthf),
+    FN_SELF(glClearStencil), FN_SELF(glColorMask),
+    FN_SELF(glCompressedTexImage2D), FN_SELF(glCullFace),
+    FN_SELF(glDeleteBuffers), FN_SELF(glDeleteFramebuffers),
+    FN_SELF(glDeleteProgram), FN_SELF(glDeleteRenderbuffers),
+    FN_SELF(glDeleteShader), FN_SELF(glDeleteTextures),
+    FN_SELF(glDepthFunc), FN_SELF(glDepthMask),
+    FN_SELF(glFramebufferRenderbuffer), FN_SELF(glFramebufferTexture2D),
+    FN_SELF(glFrontFace), FN_SELF(glGenFramebuffers),
+    FN_SELF(glGenRenderbuffers), FN_SELF(glGenerateMipmap),
+    FN_SELF(glGetActiveAttrib), FN_SELF(glGetActiveUniform),
+    FN_SELF(glGetBooleanv), FN_SELF(glGetFloatv),
+    FN_SELF(glGetProgramInfoLog), FN_SELF(glGetShaderSource),
+    FN_SELF(glIsBuffer), FN_SELF(glIsEnabled), FN_SELF(glIsRenderbuffer),
+    FN_SELF(glLineWidth), FN_SELF(glPixelStorei), FN_SELF(glReadPixels),
+    FN_SELF(glRenderbufferStorage), FN_SELF(glScissor),
+    FN_SELF(glStencilMask), FN_SELF(glTexParameterf),
+    FN_SELF(glUniform1fv), FN_SELF(glUniform2f), FN_SELF(glUniform2fv),
+    FN_SELF(glUniform2i), FN_SELF(glUniform2iv),
+    FN_SELF(glUniform3f), FN_SELF(glUniform3fv),
+    FN_SELF(glUniform3i), FN_SELF(glUniform3iv),
+    FN_SELF(glUniform4f), FN_SELF(glUniform4fv),
+    FN_SELF(glUniform4i), FN_SELF(glUniform4iv),
+    FN_SELF(glUniformMatrix2fv), FN_SELF(glUniformMatrix3fv),
+    FN("glMapBufferOES",android_gl_map_buffer_oes),
+    FN("glUnmapBufferOES",android_gl_unmap_buffer_oes),
     FN_SELF(eglGetProcAddress)
 };
 
