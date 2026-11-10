@@ -40,6 +40,61 @@ jobs:
           cat platform.log
           grep -q 'VPLNX_LINUX_PLATFORM=PASS commercial_engine=NOT_EXECUTED' platform.log
           grep -Eq 'GLES: .*OpenGL ES' platform.log
+      - name: Link real AArch64 ELF structures across two independent public test libraries
+        run: |
+          set -euo pipefail
+          cat > /tmp/vplnx-test-cxx.c <<'EOF'
+          static int state = 37;
+          int *vpl_partner_relative = &state;
+          __attribute__((visibility("default"))) int vpl_partner_api(void) {
+            return *vpl_partner_relative;
+          }
+          EOF
+          cat > /tmp/vplnx-test-game.c <<'EOF'
+          extern int vpl_partner_api(void);
+          static int state = 40;
+          int *vpl_game_relative = &state;
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *r) {
+            (void)vm;(void)r;
+            return vpl_partner_api()+*vpl_game_relative;
+          }
+          __attribute__((visibility("default"))) void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit(void *env,void *c,int w,int h) {
+            (void)env;(void)c;(void)w;(void)h;
+          }
+          __attribute__((visibility("default"))) void Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeRender(void *env,void *c) {
+            (void)env;(void)c;
+          }
+          __attribute__((visibility("default"))) void Java_org_cocos2dx_lib_Cocos2dxHelper_nativeSetContext(void *env,void *c,void *ctx,void *manager) {
+            (void)env;(void)c;(void)ctx;(void)manager;
+          }
+          EOF
+          cc -shared -fPIC -nostdlib -Wl,-z,now -Wl,-z,relro -o /tmp/vplnx-cxx.so /tmp/vplnx-test-cxx.c
+          cc -shared -fPIC -nostdlib -Wl,-z,now -Wl,-z,relro -o /tmp/vplnx-game.so /tmp/vplnx-test-game.c
+          readelf -h /tmp/vplnx-game.so | grep -q 'Machine:.*AArch64'
+          ./build-vplnx-linux/vplnx-linux-elf-check /tmp/vplnx-game.so /tmp/vplnx-cxx.so \
+            | tee elf-integration.log
+          grep -q 'VPLNX_ELF_PREFLIGHT=PASS' elf-integration.log
+          grep -q 'MEMORY_PROTECTION=PASS W_X=ENFORCED' elf-integration.log
+          grep -q 'JNI_EXPORTS=4/4' elf-integration.log
+          grep -q 'NEXT_GATE=READY_FOR_SEPARATE_JNI_ABI_TEST' elf-integration.log
+          grep -q 'COMMERCIAL_ENGINE=NOT_EXECUTED' elf-integration.log
+          grep -Eq 'resolved=[1-9][0-9]*' elf-integration.log
+          if ./build-vplnx-linux/vplnx-linux-elf-check /etc/os-release /tmp/vplnx-cxx.so; then
+            echo 'FAIL: non-ELF input accepted'
+            exit 1
+          fi
+          cat > /tmp/vplnx-unresolved.c <<'EOF'
+          extern int unknown_android_symbol(void);
+          int JNI_OnLoad(void *vm,void *r) {
+            (void)vm;(void)r;
+            return unknown_android_symbol();
+          }
+          EOF
+          cc -shared -fPIC -nostdlib -Wl,-z,now -o /tmp/vplnx-unresolved.so /tmp/vplnx-unresolved.c
+          ./build-vplnx-linux/vplnx-linux-elf-check /tmp/vplnx-unresolved.so /tmp/vplnx-cxx.so \
+            | tee elf-blocked.log
+          grep -q 'NEXT_GATE=BLOCKED_MISSING_HOST_OR_JNI_SERVICES' elf-blocked.log
+          grep -q 'COMMERCIAL_ENGINE=NOT_EXECUTED' elf-blocked.log
       - name: Publish open-source platform binary and non-sensitive logs
         uses: actions/upload-artifact@v4
         with:
@@ -47,5 +102,7 @@ jobs:
           path: |
             build-vplnx-linux/vplnx-linux-platform-check
             platform.log
+            elf-integration.log
+            elf-blocked.log
           if-no-files-found: error
           retention-days: 14
