@@ -48,3 +48,17 @@ target_link_libraries(vplnx-linux-opensles PUBLIC PkgConfig::SDL2 m)
 add_executable(vplnx-linux-audio-check src/audio_check.c)
 target_compile_options(vplnx-linux-audio-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-audio-check PRIVATE vplnx-linux-opensles)
+
+
+# MIT vpl_nx fake JNI tables, adapted for Linux pthread and existing AAsset shim.
+# Stage-1 JNI services only; no game or untrusted APK execution.
+find_package(Threads REQUIRED)
+add_library(vplnx-linux-jni STATIC upstream/jni_fake_linux.c)
+target_include_directories(vplnx-linux-jni PUBLIC upstream src)
+target_compile_definitions(vplnx-linux-jni PRIVATE _GNU_SOURCE=1)
+target_compile_options(vplnx-linux-jni PRIVATE -Wall -Wextra)
+target_link_libraries(vplnx-linux-jni PUBLIC
+    vplnx-linux-assets vplnx-linux-opensles Threads::Threads)
+add_executable(vplnx-linux-jni-check src/jni_check.c)
+target_compile_options(vplnx-linux-jni-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-linux-jni-check PRIVATE vplnx-linux-jni)
