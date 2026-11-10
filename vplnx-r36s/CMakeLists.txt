@@ -66,11 +66,21 @@ target_link_libraries(vplnx-linux-jni-check PRIVATE vplnx-linux-jni)
 
 # Explicit allowlisted Bionic/NDK/GLES2 imports for the AArch64 guest ELF.
 # Never forward Bionic FILE*, pthread object layouts or unsupported JNI calls.
+# Android ARM64 pthread opaque-object bridge backed by Linux pthreads.
+add_library(vplnx-bionic-pthread STATIC src/bionic_pthread_linux.c)
+target_include_directories(vplnx-bionic-pthread PUBLIC src)
+target_compile_options(vplnx-bionic-pthread PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-bionic-pthread PUBLIC Threads::Threads)
+add_executable(vplnx-bionic-pthread-check src/bionic_pthread_check.c)
+target_compile_options(vplnx-bionic-pthread-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-bionic-pthread-check PRIVATE vplnx-bionic-pthread)
+
 add_library(vplnx-linux-host STATIC src/host_imports_linux.c)
 target_include_directories(vplnx-linux-host PUBLIC src)
 target_compile_options(vplnx-linux-host PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-host PUBLIC
-    vplnx-linux-assets vplnx-linux-opensles PkgConfig::GLES2 PkgConfig::EGL m)
+    vplnx-linux-assets vplnx-linux-opensles vplnx-bionic-pthread
+    PkgConfig::GLES2 PkgConfig::EGL m)
 add_executable(vplnx-linux-host-check src/host_check.c)
 target_compile_options(vplnx-linux-host-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-host-check PRIVATE
