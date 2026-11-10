@@ -236,6 +236,25 @@ jobs:
           tar -tzf /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS.tar.gz | grep -q '/resumo.txt'
           tar -xOzf /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS.tar.gz \
             --wildcards '*/resumo.txt' | grep -q 'STATUS=BINARIOS_AUSENTES'
+          # Run again: ensure the previous valid tarball is backed up, never
+          # replaced in-place or truncated by a new attempt.
+          (cd /tmp && /bin/sh /tmp/vplnx-r36s-smoke/run-r36s-diagnostico.sh)
+          test -s /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS_ANTERIOR.tar.gz
+          tar -tzf /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS_ANTERIOR.tar.gz | grep -q 'resumo.txt'
+          # Simulate one native test and confirm completed results are embedded.
+          mkdir -p /tmp/vplnx-r36s-smoke/bin
+          cat > /tmp/vplnx-r36s-smoke/bin/vplnx-bionic-pthread-check <<'EOF'
+          #!/bin/sh
+          printf 'BIONIC_PTHREAD_ABI=PASS guest_mutex_bytes=40 guest_cond_bytes=48\n'
+          EOF
+          chmod 755 /tmp/vplnx-r36s-smoke/bin/vplnx-bionic-pthread-check
+          (cd /tmp && /bin/sh /tmp/vplnx-r36s-smoke/run-r36s-diagnostico.sh)
+          tar -xOzf /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS.tar.gz \
+            --wildcards '*/resultados.tsv' | grep -q 'PTHREAD_BIONIC_ABI'
+          tar -xOzf /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS.tar.gz \
+            --wildcards '*/resumo.txt' | grep -q 'STATUS=FINISHED'
+          test -s /tmp/vplnx-r36s-smoke/VPLNX_R36S_DIAGNOSTICOS_ANTERIOR.tar.gz
+          echo "R36S_ATOMIC_SNAPSHOTS=PASS previous_valid=1 current_valid=1"
           echo "R36S_FAILSAFE_LOGS=PASS"
 
       - name: Assemble complete R36S Ports diagnostic zip without commercial files
