@@ -137,6 +137,62 @@ jobs:
           grep -q 'VPLNX_JNI_FAIL_CLOSED=PASS' jni-abi.log
           grep -q 'RegisterNatives=UNIMPLEMENTED' jni-abi.log
           grep -q 'VPLNX_JNI_GAME_EXECUTED=NO' jni-abi.log
+      - name: Bionic host services mapped into AArch64 ELF (no guest code)
+        run: |
+          set -euo pipefail
+          ./build-vplnx-linux/vplnx-linux-host-check --host-selftest | tee bionic-host-selftest.log
+          grep -q 'BIONIC_HOST_SELFTEST=PASS' bionic-host-selftest.log
+          grep -q 'pthread_layout=BLOCKED file_layout=BLOCKED' bionic-host-selftest.log
+          cat > /tmp/vplnx-bionic-partner.c <<'EOF'
+          int vpl_partner_api(void) {return 12;}
+          EOF
+          cat > /tmp/vplnx-bionic-guest.c <<'EOF'
+          #include <stddef.h>
+          extern int vpl_partner_api(void);
+          extern void *AAssetManager_open(void *,const char *,int);
+          extern int __android_log_write(int,const char*,const char*);
+          extern int *__errno(void);
+          extern void glClear(unsigned int);
+          extern void *SL_IID_ENGINE;
+          extern void *memcpy(void*,const void*,size_t);
+          volatile void *bionic_open= (void *)&AAssetManager_open;
+          volatile void *bionic_gl= (void *)&glClear;
+          __attribute__((visibility("default"))) int JNI_OnLoad(void *vm,void *u) {
+              (void)vm;(void)u;
+              char dst[8]={0};
+              memcpy(dst,"abc",4);
+              int *err=__errno();
+              __android_log_write(3,"synthetic","not executed");
+              return vpl_partner_api()+(err!=0)+(SL_IID_ENGINE!=0);
+          }
+          EOF
+          cc -shared -fPIC -nostdlib -fno-builtin -Wl,-z,now \
+            -o /tmp/vplnx-bionic-partner.so /tmp/vplnx-bionic-partner.c
+          cc -shared -fPIC -nostdlib -fno-builtin -Wl,-z,now \
+            -o /tmp/vplnx-bionic-guest.so /tmp/vplnx-bionic-guest.c
+          readelf -h /tmp/vplnx-bionic-guest.so | grep -q 'Machine:.*AArch64'
+          ./build-vplnx-linux/vplnx-linux-host-check \
+            /tmp/vplnx-bionic-guest.so /tmp/vplnx-bionic-partner.so \
+            | tee bionic-host-linked.log
+          grep -q 'BIONIC_HOST_LINK=PASS' bionic-host-linked.log
+          grep -Eq 'host_slots=[1-9][0-9]*' bionic-host-linked.log
+          grep -q 'MEMORY_PROTECTION=PASS W_X=ENFORCED' bionic-host-linked.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-host-linked.log
+          cat > /tmp/vplnx-bionic-unsafe.c <<'EOF'
+          extern int pthread_mutex_lock(void *);
+          int JNI_OnLoad(void *vm,void *u) {
+              (void)vm;(void)u;
+              return pthread_mutex_lock((void *)0);
+          }
+          EOF
+          cc -shared -fPIC -nostdlib -Wl,-z,now \
+            -o /tmp/vplnx-bionic-unsafe.so /tmp/vplnx-bionic-unsafe.c
+          ./build-vplnx-linux/vplnx-linux-host-check \
+            /tmp/vplnx-bionic-unsafe.so /tmp/vplnx-bionic-partner.so \
+            | tee bionic-host-blocked.log
+          grep -q 'BIONIC_HOST_LINK=BLOCKED' bionic-host-blocked.log
+          grep -q 'MEMORY_PROTECTION=BLOCKED' bionic-host-blocked.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-host-blocked.log
       - name: Publish open-source platform binary and non-sensitive logs
         uses: actions/upload-artifact@v4
         with:
@@ -149,5 +205,8 @@ jobs:
             assets-stream.log
             audio-opensles.log
             jni-abi.log
+            bionic-host-selftest.log
+            bionic-host-linked.log
+            bionic-host-blocked.log
           if-no-files-found: error
           retention-days: 14
