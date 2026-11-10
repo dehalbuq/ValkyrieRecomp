@@ -1,0 +1,46 @@
+LENNETH VPL_NX - PRIMEIRO DIAGNOSTICO NO R36S
+==================================================
+ATENCAO: ESTE PACOTE NAO ABRE O JOGO, NAO E UMA ROM E NAO INICIA
+O MOTOR COMERCIAL. O objetivo e testar Mali-G31, GLES2/GLES3,
+OpenSL ES com SDL2, JNI e importacoes ARM64 das bibliotecas privadas.
+
+INSTALACAO
+1. Baixe o ZIP "VPLNX-R36S-DIAGNOSTICO-ARM64.zip" gerado no GitHub
+   Actions e descompacte TODO o conteudo na pasta ports do cartao.
+   Deve aparecer ports/VPLNX R36S Diagnostico.sh e
+   ports/vplnx-r36s/bin/vplnx-linux-host-check etc.
+2. Opcional: mantenha as bibliotecas libMyGame.so e libc++_shared.so
+   na pasta ports/lenneth-fase42 que ja utilizava na Fase42, OU
+   em ports/vplnx-r36s/private/. Nao copie a biblioteca libRMS.so.
+3. No R36S, abra Ports > VPLNX R36S Diagnostico.
+   A tela pode ficar preta por cerca de 2 segundos em cada teste
+   grafico. O aplicativo de teste sai sozinho.
+4. Quando terminar, envie SOMENTE o arquivo:
+   ports/vplnx-r36s/VPLNX_R36S_DIAGNOSTICOS.tar.gz
+
+FALLBACK: se nao houver .tar.gz, envie:
+   ports/vplnx-r36s/VPLNX_R36S_INICIO.log
+ou:
+   ports/vplnx-r36s/VPLNX_R36S_ERRO_COLETA.log
+
+TESTES DO QUE
+- OpenGL ES2 e ES3 REAIS: os logs mostram vendor/renderer/versao.
+- Audio: tentativa no dispositivo real. Se falhar, simulado separado.
+- JNI e assets: executam um teste inventado, sem arquivos do jogo.
+- ELF ARM64: mapeiam e resolvem imports, SEM chamar JNI_OnLoad,
+  nenhum construtor original e nenhum codigo comercial.
+- Os resultados PASS dos testes sintéticos NAO significam que
+  o jogo inicia, seja jogavel ou tem bom FPS.
+- Se a GPU reportar llvmpipe/software renderer, NAO comprovou
+  aceleracao Mali-G31.
+
+PRIVACIDADE
+- O pacote nao contem arquivos comerciais.
+- O relatorio inclui ambiente/versoes de GPU e nomes de simbolos
+  ELF nao resolvidos, mas nunca copia bibliotecas .so nem assets.
+- Nao envie os arquivos grandes do jogo para um workflow publico.
+
+Codigo-fonte livre (plataforma, utilitarios e testes):
+https://github.com/dehalbuq/ValkyrieRecomp/tree/port/lenneth-vplnx-linux-arm64-loader/vplnx-r36s
+Fonte do wrapper original (licenca MIT):
+https://github.com/delsonazevedo/vpl_nx
