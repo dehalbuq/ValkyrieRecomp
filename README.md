@@ -1,5 +1,17 @@
 # ValkyrieRecomp
 
+> ### Projeto paralelo ativo: Lenneth Android ARM64 para R36S
+> Este repositório também contém um port **experimental** do wrapper aberto
+> [vpl_nx](https://github.com/delsonazevedo/vpl_nx) para dArkOSRE/R36S,
+> desenvolvido no ramo
+> [`port/lenneth-vplnx-linux-arm64-loader`](https://github.com/dehalbuq/ValkyrieRecomp/tree/port/lenneth-vplnx-linux-arm64-loader).
+> **Esse port não é a versão PS1 e ainda NÃO executa o jogo.**
+>
+> 📍 **[CONTINUAR AQUI — estado técnico atualizado](https://github.com/dehalbuq/ValkyrieRecomp/blob/port/lenneth-vplnx-linux-arm64-loader/vplnx-r36s/CONTINUAR_AQUI.md)**
+>
+> 📝 **[PROMPT para retomar o port em outro chat](https://github.com/dehalbuq/ValkyrieRecomp/blob/port/lenneth-vplnx-linux-arm64-loader/vplnx-r36s/PROMPT_RETOMADA_CHATGPT.md)**
+
+
 <p align="center">
   <img src="docs/valkyrie-recomp-logo.png" alt="ValkyrieRecomp" width="900">
 </p>
