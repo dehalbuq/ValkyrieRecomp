@@ -125,6 +125,18 @@ jobs:
           grep -q 'VPLNX_OPENSL=PASS' audio-opensles.log
           grep -q 'callback_drained=1' audio-opensles.log
           grep -q 'commercial_engine=NO' audio-opensles.log
+      - name: Linux Cocos2d JNI/JavaVM and AAsset native services synthetic test
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vplnx-jni-assets
+          printf 'SYNTHJNI' > /tmp/vplnx-jni-assets/sample.bin
+          timeout 30 ./build-vplnx-linux/vplnx-linux-jni-check /tmp/vplnx-jni-assets \
+            | tee jni-abi.log
+          grep -q 'VPLNX_JNI_ABI=PASS' jni-abi.log
+          grep -q 'VPLNX_JNI_ASSETS=PASS' jni-abi.log
+          grep -q 'VPLNX_JNI_FAIL_CLOSED=PASS' jni-abi.log
+          grep -q 'RegisterNatives=UNIMPLEMENTED' jni-abi.log
+          grep -q 'VPLNX_JNI_GAME_EXECUTED=NO' jni-abi.log
       - name: Publish open-source platform binary and non-sensitive logs
         uses: actions/upload-artifact@v4
         with:
@@ -136,5 +148,6 @@ jobs:
             elf-blocked.log
             assets-stream.log
             audio-opensles.log
+            jni-abi.log
           if-no-files-found: error
           retention-days: 14
