@@ -16,6 +16,8 @@ typedef void *(*FnClass)(void *, const char *);
 typedef void *(*FnID)(void *, void *, const char *, const char *);
 typedef void *(*FnObject)(void *, void *, void *, ...);
 typedef jint (*FnInt)(void *, void *, void *, ...);
+typedef float (*FnFloat)(void *, void *, void *, ...);
+typedef int64_t (*FnLong)(void *, void *, void *, ...);
 typedef void *(*FnNewStr)(void *, const char *);
 typedef const char *(*FnGetStr)(void *, void *, unsigned char *);
 typedef void (*FnReleaseStr)(void *, void *, const char *);
@@ -49,6 +51,8 @@ int main(int argc, char **argv) {
     FnID static_id=(FnID)env[113];
     FnObject object=(FnObject)env[114];
     FnInt integer=(FnInt)env[129];
+    FnFloat jfloat=(FnFloat)env[135];
+    FnLong jlong=(FnLong)env[132];
     FnNewStr newstr=(FnNewStr)env[167];
     FnGetStr getstr=(FnGetStr)env[169];
     FnReleaseStr releasestr=(FnReleaseStr)env[170];
@@ -79,6 +83,13 @@ int main(int argc, char **argv) {
     releasestr(fake_env,path,path_text);
     delete_ref(fake_env,path);
 
+    method=static_id(fake_env,clazz,"getFloatForKey","(Ljava/lang/String;F)F");
+    void *key=newstr(fake_env,"vol");
+    float f=jfloat(fake_env,clazz,method,key,3.5); /* float promotes to double in varargs */
+    if(f<3.49f || f>3.51f) fail("float return ABI");
+    delete_ref(fake_env,key);
+    method=static_id(fake_env,clazz,"unknownLongForTest","()J");
+    if(jlong(fake_env,clazz,method)!=0) fail("long return ABI");
     method=static_id(fake_env,clazz,"getDPI","()I");
     if(integer(fake_env,clazz,method)!=320) fail("integer method");
     method=static_id(fake_env,clazz,"isNetworkConnected","()Z");
@@ -103,6 +114,10 @@ int main(int argc, char **argv) {
         fail("int array contents");
     release_data(fake_env,a,elements,0);
     delete_ref(fake_env,a);
+    void *touches=jni_make_input_array(2,4);
+    int32_t overflow_values[]={1,2,3};
+    jni_input_array_set(touches,overflow_values,3);
+    if(length(fake_env,touches)!=2) fail("persistent JNI array overflow accepted");
 
     method=static_id(fake_env,clazz,"getObbAssetFileDescriptor","(Ljava/lang/String;)[J");
     void *name=newstr(fake_env,"sample.bin");
@@ -122,7 +137,7 @@ int main(int argc, char **argv) {
     delete_ref(fake_env,name);
 
     vpl_assets_shutdown();
-    puts("VPLNX_JNI_ABI=PASS jni_version=1.6 GetEnv=PASS local_refs=PASS");
+    puts("VPLNX_JNI_ABI=PASS jni_version=1.6 GetEnv=PASS local_refs=PASS float_long=PASS array_bounds=PASS");
     puts("VPLNX_JNI_ASSETS=PASS file_descriptor=PASS");
     puts("VPLNX_JNI_FAIL_CLOSED=PASS network=DENIED permissions=DENIED RegisterNatives=UNIMPLEMENTED");
     puts("VPLNX_JNI_GAME_EXECUTED=NO");
