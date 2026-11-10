@@ -1,5 +1,17 @@
 # Lenneth R36S: Linux ARM64 port based on vpl_nx
 
+> **Quer retomar o trabalho em outro chat?**
+> Abra [CONTINUAR AQUI — checkpoint mais recente](CONTINUAR_AQUI.md)
+> e [PROMPT para novo chat](PROMPT_RETOMADA_CHATGPT.md).
+> Atualizamos esses dois arquivos ao final de cada etapa.
+>
+> **Último teste no dispositivo (recebido em 10/11/2026):** GLES2/GLES3
+> na Mali-G31, áudio 44,1 kHz, JNI, assets e pthread **PASS**.
+> Vinculação ELF comercial ainda **BLOCKED**. Um ZIP manual tinha logs
+> individuais vazios apesar do log central completo; o diagnóstico
+> agora grava snapshots atômicos após cada teste. **Não jogável ainda.**
+
+
 **Status: porting investigation / not playable yet.**
 
 The original MIT project [delsonazevedo/vpl_nx](https://github.com/delsonazevedo/vpl_nx)
