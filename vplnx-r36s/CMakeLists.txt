@@ -62,3 +62,16 @@ target_link_libraries(vplnx-linux-jni PUBLIC
 add_executable(vplnx-linux-jni-check src/jni_check.c)
 target_compile_options(vplnx-linux-jni-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-jni-check PRIVATE vplnx-linux-jni)
+
+
+# Explicit allowlisted Bionic/NDK/GLES2 imports for the AArch64 guest ELF.
+# Never forward Bionic FILE*, pthread object layouts or unsupported JNI calls.
+add_library(vplnx-linux-host STATIC src/host_imports_linux.c)
+target_include_directories(vplnx-linux-host PUBLIC src)
+target_compile_options(vplnx-linux-host PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-linux-host PUBLIC
+    vplnx-linux-assets vplnx-linux-opensles PkgConfig::GLES2 PkgConfig::EGL m)
+add_executable(vplnx-linux-host-check src/host_check.c)
+target_compile_options(vplnx-linux-host-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-linux-host-check PRIVATE
+    vplnx-linux-elf vplnx-linux-host)
