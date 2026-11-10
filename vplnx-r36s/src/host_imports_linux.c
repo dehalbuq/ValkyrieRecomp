@@ -145,7 +145,8 @@ static const Import native_imports[] = {
     FN_SELF(gettimeofday), FN_SELF(nanosleep), FN_SELF(usleep),
     FN_SELF(sched_yield),
     FN_SELF(read), FN_SELF(write), FN_SELF(close), FN_SELF(lseek),
-    FN_SELF(open), FN_SELF(rename), FN_SELF(remove), FN_SELF(mkdir),
+    /* open/rename/remove/mkdir must use sandboxed save/asset path adapters,
+       not unrestricted glibc calls. */
     FN_SELF(getenv), FN_SELF(getpid), FN_SELF(gettid),
     FN_SELF(getpriority), FN_SELF(setpriority), FN_SELF(sysconf),
     FN_SELF(abort), FN_SELF(qsort), FN_SELF(posix_memalign),
@@ -302,7 +303,8 @@ int vpl_linux_host_selftest(void) {
     };
     const char *forbidden[] = {
         "pthread_create","pthread_rwlock_init","fopen","fread","fclose",
-        "opendir","stat","fopen","system","dlopen","unknown_android_symbol",
+        "opendir","stat","fopen","open","rename","remove","mkdir",
+        "system","dlopen","unknown_android_symbol",
         "ExecuteProgram","__stack_chk_guard"
     };
     VplHostStats stats={0};
