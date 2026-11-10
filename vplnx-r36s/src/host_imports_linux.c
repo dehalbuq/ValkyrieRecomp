@@ -6,6 +6,7 @@
 #define _GNU_SOURCE 1
 #include "host_imports_linux.h"
 #include "assets_linux.h"
+#include "bionic_pthread_linux.h"
 #include "../upstream/opensles.h"
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>
@@ -137,6 +138,23 @@ static const Import native_imports[] = {
     FN("android_set_abort_message",android_abort_message),
 
     /* Android NDK AAsset interface - rooted, no absolute paths or symlinks. */
+
+    /* Android LP64 pthread opaque-object translation: guest structs are
+     * NEVER passed straight to glibc. Android sizes: mutex=40, cond=48. */
+    FN("pthread_mutex_init",vpl_bp_mutex_init),
+    FN("pthread_mutex_lock",vpl_bp_mutex_lock),
+    FN("pthread_mutex_trylock",vpl_bp_mutex_trylock),
+    FN("pthread_mutex_unlock",vpl_bp_mutex_unlock),
+    FN("pthread_mutex_destroy",vpl_bp_mutex_destroy),
+    FN("pthread_mutexattr_init",vpl_bp_mutexattr_init),
+    FN("pthread_mutexattr_settype",vpl_bp_mutexattr_settype),
+    FN("pthread_mutexattr_destroy",vpl_bp_mutexattr_destroy),
+    FN("pthread_cond_init",vpl_bp_cond_init),
+    FN("pthread_cond_signal",vpl_bp_cond_signal),
+    FN("pthread_cond_broadcast",vpl_bp_cond_broadcast),
+    FN("pthread_cond_wait",vpl_bp_cond_wait),
+    FN("pthread_cond_timedwait",vpl_bp_cond_timedwait),
+    FN("pthread_cond_destroy",vpl_bp_cond_destroy),
     FN("AAssetManager_fromJava",AAssetManager_fromJava_fake),
     FN("AAssetManager_open",AAssetManager_open_fake),
     FN("AAssetManager_openDir",AAssetManager_openDir_fake),
@@ -241,10 +259,11 @@ int vpl_linux_host_selftest(void) {
         "malloc","memcpy","__errno","__memcpy_chk","__android_log_write",
         "AAssetManager_open","AAsset_read","AAsset_openFileDescriptor64",
         "slCreateEngine","SL_IID_ENGINE","SL_IID_PLAY","glClear","glTexImage2D",
-        "atan2f","strtod","memchr","glMapBufferOES","glDeleteFramebuffers"
+        "atan2f","strtod","memchr","glMapBufferOES","glDeleteFramebuffers",
+        "pthread_mutex_lock","pthread_cond_wait","pthread_mutexattr_settype"
     };
     const char *forbidden[] = {
-        "pthread_mutex_lock","pthread_cond_wait","fopen","fread","fclose",
+        "pthread_create","pthread_rwlock_init","fopen","fread","fclose",
         "opendir","stat","system","dlopen","unknown_android_symbol",
         "ExecuteProgram","__stack_chk_guard"
     };
