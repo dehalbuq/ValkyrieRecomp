@@ -27,3 +27,12 @@ target_compile_options(vplnx-linux-elf PRIVATE -Wall -Wextra -Werror)
 add_executable(vplnx-linux-elf-check src/elf_check.c)
 target_compile_options(vplnx-linux-elf-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-elf-check PRIVATE vplnx-linux-elf)
+
+
+# NDK AAsset* API backed by sandboxed 64-bit Linux streaming.
+add_library(vplnx-linux-assets STATIC src/assets_linux.c)
+target_include_directories(vplnx-linux-assets PUBLIC src)
+target_compile_options(vplnx-linux-assets PRIVATE -Wall -Wextra -Werror)
+add_executable(vplnx-linux-assets-check src/assets_check.c)
+target_compile_options(vplnx-linux-assets-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-linux-assets-check PRIVATE vplnx-linux-assets)
