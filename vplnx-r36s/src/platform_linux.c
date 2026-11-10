@@ -26,7 +26,9 @@ int vpl_linux_init(VplLinuxPlatform *p, int width, int height, int gles_major) {
     memset(p, 0, sizeof(*p));
     p->width = width;
     p->height = height;
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) != 0) {
+    /* GPU-only probe: do not initialize audio. Some R36S SDL builds lack
+       the 'dummy' audio backend, which would otherwise prevent EGL tests. */
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
         fprintf(stderr, "[vpl-linux] SDL_Init failed: %s\n", SDL_GetError());
         return -1;
     }
