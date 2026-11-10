@@ -10,9 +10,14 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define VPL_HOST_MAX_MISSING 256
 typedef struct {
     size_t found;
     size_t unknown;
+    size_t missing_unique;
+    size_t missing_overflow;
+    /* Names point to read-only .dynstr while ELF modules are open. */
+    const char *missing_names[VPL_HOST_MAX_MISSING];
 } VplHostStats;
 
 /* Return pointer to a host routine or (for data imports) the actual data
