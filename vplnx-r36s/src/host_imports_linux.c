@@ -28,6 +28,7 @@ extern void __stack_chk_fail(void) __attribute__((noreturn));
 #include <sched.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <fcntl.h>
 #include <wchar.h>
 #include <wctype.h>
