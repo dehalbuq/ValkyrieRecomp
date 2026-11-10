@@ -21,7 +21,7 @@ int main(int argc,char **argv) {
         return 2;
     }
     VplElf game={0},partner={0};
-    VplHostStats stats={0};
+    VplHostStats guest_stats={0},partner_stats={0};
     char error[160]={0};
     if(vpl_elf_open(&partner,argv[2],"partner",error,sizeof(error))!=0) {
         fprintf(stderr,"BIONIC_HOST=ERROR partner=%s\n",error);
@@ -34,9 +34,9 @@ int main(int argc,char **argv) {
     }
     /* Directly consume host callbacks and partner exports. No dlopen of
      * foreign code and no function calls into the mapped ELF modules. */
-    int a=vpl_elf_link_host(&partner,&game,vpl_linux_host_lookup,&stats,stdout,
+    int a=vpl_elf_link_host(&partner,&game,vpl_linux_host_lookup,&partner_stats,stdout,
                             error,sizeof(error));
-    int b=vpl_elf_link_host(&game,&partner,vpl_linux_host_lookup,&stats,stdout,
+    int b=vpl_elf_link_host(&game,&partner,vpl_linux_host_lookup,&guest_stats,stdout,
                             error,sizeof(error));
     int complete=!a && !b &&
         !partner.reloc_unresolved && !game.reloc_unresolved &&
@@ -55,9 +55,17 @@ int main(int argc,char **argv) {
         puts("MEMORY_PROTECTION=BLOCKED unresolved_guest_imports=1");
     }
     printf("BIONIC_HOST_IMPORTS accepted=%zu blocked=%zu guest_slots=%zu host_slots=%zu\n",
-           stats.found,stats.unknown,
+           guest_stats.found+partner_stats.found,
+           guest_stats.unknown+partner_stats.unknown,
            game.reloc_resolved+partner.reloc_resolved,
            game.reloc_host_resolved+partner.reloc_host_resolved);
+    printf("PENDING_IMPORT_SUMMARY guest_unique=%zu partner_unique=%zu guest_overflow=%zu partner_overflow=%zu\n",
+           guest_stats.missing_unique,partner_stats.missing_unique,
+           guest_stats.missing_overflow,partner_stats.missing_overflow);
+    for (size_t i=0; i<guest_stats.missing_unique; i++)
+        printf("PENDING_IMPORT module=guest symbol=%s\n",guest_stats.missing_names[i]);
+    for (size_t i=0; i<partner_stats.missing_unique; i++)
+        printf("PENDING_IMPORT module=partner symbol=%s\n",partner_stats.missing_names[i]);
     puts("BIONIC_HOST_SECURITY unknown_imports=FAIL_CLOSED pthread_opaque=BLOCKED");
     printf("BIONIC_HOST_LINK=%s\n",complete?"PASS":"BLOCKED");
     puts("COMMERCIAL_ENGINE_EXECUTED=NO");
