@@ -40,24 +40,34 @@ inspecione **todo o conteúdo**, inclusive `execucao.txt`,
   por imports Bionic e ABI incompleta**.
 - O motor comercial **NUNCA foi inicializado** nesta versão: não declarar
   jogo rodando, FPS medido ou intro pulável.
-- O último diagnóstico manual foi o ZIP
-  `execucao-20250904-080230-3358.zip` recebido em 10/11/2026.
-  O relógio do R36S estava incorreto (mostrou 2025).
-  `execucao.txt` e `resultados.tsv` estavam completos, enquanto
-  alguns logs individuais de ELF/JNI/áudio e `resumo.txt` tinham
-  **0 bytes**. Os resultados individuais podem ser inferidos do
-  log central, mas **NÃO** uma nova contagem exata de importações
-  pendentes. Últimas linhas exibem `mbrlen`, `vfprintf`,
-  `wcrtomb` e `__cxa_atexit` entre outras pendências no C++.
-- Havia um problema: o arquivo automático de diagnóstico podia
-  ficar vazio depois de interrupção/reinicialização. Foi implementada
-  coleta por snapshots atômicos depois de cada teste, backup
-  `VPLNX_R36S_DIAGNOSTICOS_ANTERIOR.tar.gz` e proteção contra
-  colisões causadas pela data do sistema errada.
-  A CI **42906180629 PASSOU** para compilação ARM64, snapshots/backup
-  e empacotamento: https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42906180629 .
-  Pacote gerado: **Teste 5, logs resilientes**. Ainda NÃO houve validação
-  da recuperação após desligamento abrupto no R36S real.
+- **Último diagnóstico é o Teste 5, recebido em 10/11/2026**:
+  `VPLNX_R36S_DIAGNOSTICOS.tar(3).gz` com
+  `ELF_REAL_IMPORTS.log` de 7710 bytes e demais logs COMPLETOS.
+  Pasta interna `execucao-20250904-080307-$`, com data de 2025
+  INCORRETA pelo relógio do R36S; usar data real de recebimento.
+  Todos os testes individuais de hardware PASS, porém as bibliotecas
+  comerciais ainda BLOCKED:
+  * `libMyGame.so`: 59 relocações pendentes, 57 nomes únicos;
+  * `libc++_shared.so`: 63 relocações pendentes, 62 nomes únicos;
+  * 122 relocações; **99 nomes únicos totais (20 comuns)**.
+  O comparativo anterior era 183 relocações, logo 61 a menos.
+  A lista EXATA dos 99 nomes consta de
+  `vplnx-r36s/PENDENCIAS_TESTE5.md`. **Não tratar
+  `ELF_REAL_BASIC.log` como contagem real**: ele deliberadamente
+  desativa a tabela host e reporta muito mais faltas.
+- Os snapshots automáticos preservaram TODOS os logs do Teste 5
+  finalizado; GitHub CI de backup/snapshots também PASSOU.
+  Ainda NÃO foi testado o comportamento após queda de energia.
+- **Após este diagnóstico**, foi integrada no ramo uma nova camada
+  `bionic_fortify_linux.c` com 6 símbolos Android FORTIFY
+  (`__strcat_chk`, `__strncpy_chk`, `__strchr_chk`,
+  `__read_chk`, `__vsnprintf_chk`, `__vsprintf_chk`),
+  além de funções wchar simples. O CI
+  https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42941739463
+  **PASSOU** (compilação e testes sintéticos ARM64).
+  Essa camada ainda NÃO foi validada com os binários comerciais
+  no R36S. Não inventar nova contagem resolvida.
+
 - O código não publica nem baixa bibliotecas/ROM/CPK comerciais.
 - **O vpl_nx é um wrapper Android e não um novo motor totalmente livre.**
 - O APK Android do usuário não é binariamente idêntico ao do Switch:
@@ -65,18 +75,18 @@ inspecione **todo o conteúdo**, inclusive `execucao.txt`,
   símbolos ELF e verificar a versão.
 
 **Próximo trabalho prioritário:**
-1. Verificar se o último CI do ramo passou e se o pacote dos novos
-   snapshots foi produzido corretamente.
-2. Recuperar `ELF_REAL_IMPORTS.log` completo para calcular
-   os bloqueios ATUAIS do motor e do libc++ separadamente.
-3. Implementar os **shims ABI Bionic para arquivos/saves/stdio e
-   lifecycle C++**, sem mandar FILE*/pthread_t diretamente à glibc;
-   explorar TLS/threads adicionais apenas com testes sólidos.
-4. Usar GitHub Actions ARM64 para testar por lotes e não pedir
-   teste em R36S a cada pequena alteração.
-5. Só tentar JNI_OnLoad comercial quando símbolos/ABIs forem
-   resolvidos, isolando processo, timeout e logs; **sem enviar
-   arquivos comerciais ao CI público**.
+1. Ler `vplnx-r36s/CONTINUAR_AQUI.md` e
+   `vplnx-r36s/PENDENCIAS_TESTE5.md` antes de alterar código.
+2. Validar o **Teste 6 FORTIFY** no R36S, conferindo logs completos
+   `ELF_REAL_IMPORTS.log`; medir a diferença em relação aos 122
+   blockers do Teste 5, sem confundir testes sintéticos com engine.
+3. Implementar **shims ABI Bionic para arquivos/saves/stdio**, ciclo de
+   vida C++ `__cxa_atexit/finalize`, threads/TLS e símbolos restantes;
+   nunca passar `FILE*` e `pthread_t` diretamente para glibc.
+4. Usar GitHub Actions ARM64 para validar por lotes. Não publicar
+   arquivos comerciais no repositório.
+5. Só testar `JNI_OnLoad` original isoladamente após completar as
+   dependências com ABI segura. Nada de offsets hardcoded do Switch.
 
 **Minha preferência de trabalho:** português brasileiro, acompanhamento
 amigável e técnico, avanço contínuo com correções reais no GitHub,
