@@ -9,6 +9,7 @@ extern void __stack_chk_fail(void) __attribute__((noreturn));
 #include "assets_linux.h"
 #include "bionic_pthread_linux.h"
 #include "bionic_fortify_linux.h"
+#include "bionic_cxa_linux.h"
 #include "../upstream/opensles.h"
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>
@@ -185,6 +186,8 @@ static const Import native_imports[] = {
     FN("__read_chk",vpl_bf_read),
     FN("__vsnprintf_chk",vpl_bf_vsnprintf),
     FN("__vsprintf_chk",vpl_bf_vsprintf),
+    FN("__cxa_atexit",vpl_bcxa_atexit),
+    FN("__cxa_finalize",vpl_bcxa_finalize),
     FN("__errno",android_errno),
     FN("__memcpy_chk",android_memcpy_chk),
     FN("__memmove_chk",android_memmove_chk),
@@ -302,6 +305,15 @@ uintptr_t vpl_linux_host_lookup(const char *symbol, void *context) {
         note_missing(stats,symbol);
         return 0;
     }
+    if (strcmp(symbol,"__stack_chk_guard")==0) {
+        uintptr_t address=vpl_bionic_stack_guard_address();
+        if (address) {
+            if (stats) stats->found++;
+            return address;
+        }
+        note_missing(stats,symbol);
+        return 0;
+    }
     for (size_t i=0; i<sizeof(native_imports)/sizeof(native_imports[0]); i++)
         if (strcmp(symbol,native_imports[i].name)==0) {
             if (stats) stats->found++;
@@ -320,13 +332,14 @@ int vpl_linux_host_selftest(void) {
         "time","clock_gettime","nanosleep","read","write","close",
         "posix_memalign","snprintf","sscanf","__stack_chk_fail",
         "__strcat_chk","__strncpy_chk","__strchr_chk","__read_chk",
+        "__cxa_atexit","__cxa_finalize","__stack_chk_guard",
         "__vsnprintf_chk","__vsprintf_chk","wcstod","wcstoul","strxfrm"
     };
     const char *forbidden[] = {
         "pthread_create","pthread_rwlock_init","fopen","fread","fclose",
         "opendir","stat","fopen","open","rename","remove","mkdir",
         "system","dlopen","unknown_android_symbol",
-        "ExecuteProgram","__stack_chk_guard"
+        "ExecuteProgram","__cxa_thread_atexit_impl"
     };
     VplHostStats stats={0};
     for(size_t i=0;i<sizeof(present)/sizeof(present[0]);i++)
