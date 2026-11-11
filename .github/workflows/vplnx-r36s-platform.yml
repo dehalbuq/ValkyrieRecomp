@@ -256,6 +256,15 @@ jobs:
           grep -q 'BIONIC_HOST_LINK=PASS' bionic-fortify-imports.log
           grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-fortify-imports.log
 
+      - name: Bionic C++ destructor lifecycle and randomized stack guard ABI
+        run: |
+          set -euo pipefail
+          ./build-vplnx-linux/vplnx-bionic-cxa-check \
+            | tee bionic-cxa.log
+          grep -q 'VPLNX_CXA_ABI=PASS' bionic-cxa.log
+          grep -q 'VPLNX_BIONIC_STACK_GUARD=PASS' bionic-cxa.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-cxa.log
+
       - name: Cloud-only synthetic ARM64 guest executes JNI_OnLoad through ELF/JNI/Bionic
         run: |
           set -euo pipefail
@@ -405,5 +414,6 @@ jobs:
             synthetic-arm64-reject.log
             synthetic-arm64-stress.log
             cloud-elf-adversarial.log
+            bionic-cxa.log
           if-no-files-found: error
           retention-days: 14
