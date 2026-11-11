@@ -5,11 +5,15 @@
 > e [PROMPT para novo chat](PROMPT_RETOMADA_CHATGPT.md).
 > Atualizamos esses dois arquivos ao final de cada etapa.
 >
-> **Último teste no dispositivo (recebido em 10/11/2026):** GLES2/GLES3
-> na Mali-G31, áudio 44,1 kHz, JNI, assets e pthread **PASS**.
-> Vinculação ELF comercial ainda **BLOCKED**. Um ZIP manual tinha logs
-> individuais vazios apesar do log central completo; o diagnóstico
-> agora grava snapshots atômicos após cada teste. **Não jogável ainda.**
+> **Último teste no dispositivo (recebido em 10/11/2026):** Teste 5 com
+> logs COMPLETOS (snapshots atômicos). GLES2/GLES3 Mali-G31, áudio 44,1 kHz,
+> JNI, assets e pthread **PASS**. Imports da engine Android ainda
+> **BLOCKED: 59 relocações no jogo e 63 em libc++ (99 nomes únicos)**.
+> Veja [inventário de pendências reais](PENDENCIAS_TESTE5.md).
+>
+> **Novo Teste 6 (FORTIFY + wide chars):** código ARM64 e testes
+> sintéticos aprovados no [GitHub Actions 42941739463](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42941739463).
+> Ainda NÃO validado com o jogo real no portátil. **Não jogável ainda.**
 
 
 **Status: porting investigation / not playable yet.**
