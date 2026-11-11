@@ -93,11 +93,14 @@ jobs:
           printf 'SYNTHJNI' > /tmp/vplnx-deep-assets/sample.bin
           build-deep/vplnx-linux-host-check --host-selftest | tee host.log
           build-deep/vplnx-bionic-pthread-check | tee pthread.log
+          build-deep/vplnx-bionic-cxa-check | tee cxa.log
           build-deep/vplnx-bionic-fortify-check > fortify.log 2>&1
           build-deep/vplnx-linux-audio-check | tee audio.log
           build-deep/vplnx-linux-jni-check /tmp/vplnx-deep-assets | tee jni.log
           grep -q 'BIONIC_HOST_SELFTEST=PASS' host.log
           grep -q 'BIONIC_PTHREAD_ABI=PASS' pthread.log
+          grep -q 'VPLNX_CXA_ABI=PASS' cxa.log
+          grep -q 'VPLNX_BIONIC_STACK_GUARD=PASS' cxa.log
           grep -q 'VPLNX_BIONIC_FORTIFY=PASS' fortify.log
           grep -q 'VPLNX_OPENSL=PASS' audio.log
           grep -q 'VPLNX_JNI_ABI=PASS' jni.log
@@ -137,6 +140,7 @@ jobs:
             reject.log
             host.log
             pthread.log
+            cxa.log
             fortify.log
             audio.log
             jni.log
