@@ -115,6 +115,14 @@ jobs:
             --cases 128 | tee elf-malformed.log
           grep -q 'CLOUD_ELF_MUTATION=PASS' elf-malformed.log
 
+      - name: Public Test5 import symbol audit without proprietary binaries
+        run: |
+          set -euo pipefail
+          python3 vplnx-r36s/tests/cloud_import_coverage.py \
+            --evidence vplnx-r36s/PENDENCIAS_TESTE5.md \
+            --imports vplnx-r36s/src/host_imports_linux.c | tee import-coverage.log
+          grep -q 'CLOUD_IMPORT_COVERAGE=PASS' import-coverage.log
+
       - name: Repeat guest boot and host pthread synchronization cycles
         run: |
           set -euo pipefail
@@ -141,6 +149,7 @@ jobs:
             host.log
             pthread.log
             cxa.log
+            import-coverage.log
             fortify.log
             audio.log
             jni.log
