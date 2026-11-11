@@ -16,6 +16,13 @@ extern int vplnx_synthetic_partner_checksum(int);
 extern size_t strlen(const char *);
 extern void *malloc(size_t);
 extern void free(void *);
+extern int __cxa_atexit(void (*)(void*), void*, void*);
+extern void __cxa_finalize(void*);
+extern uintptr_t __stack_chk_guard;
+static int guest_dso, guest_dtor_value=0;
+static void guest_dtor(void *arg) {
+    *(int*)arg=1234;
+}
 
 __attribute__((visibility("default")))
 int JNI_OnLoad(void *vm, void *reserved) {
@@ -37,5 +44,10 @@ int JNI_OnLoad(void *vm, void *reserved) {
     int good = *number == 42 && strlen("vplnx") == 5;
     free(number);
     if (pthread_mutex_unlock(&s_lock) != 0) return -8;
+    if (__stack_chk_guard == 0) return -10;
+    if (__cxa_atexit(guest_dtor,&guest_dtor_value,&guest_dso)!=0)
+        return -11;
+    __cxa_finalize(&guest_dso);
+    if (guest_dtor_value != 1234) return -12;
     return good ? 0x00010006 : -9;
 }
