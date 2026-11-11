@@ -32,7 +32,7 @@ Pasta interna: `execucao-20250904-080307-$` — o relógio do dArkOSRE
 recebimento e CI para ordenar os testes; não inferir que foi executado
 em 2025.
 
-**Boa notícia:** após a correção de snapshots atômicos, **todos os nove
+**Boa notícia:** após a correção de snapshots atômicos, **todos os onze
 arquivos de texto da execução têm tamanho não zero**, inclusive
 `ELF_REAL_IMPORTS.log` (7.710 bytes), `ELF_REAL_BASIC.log`
 (2.472 bytes), `execucao.txt` (6.175 bytes), `resultados.tsv`
