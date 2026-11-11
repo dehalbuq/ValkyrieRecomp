@@ -294,6 +294,17 @@ jobs:
           done
           echo 'SYNTHETIC_ARM64_STRESS=PASS iterations=100' | tee synthetic-arm64-stress.log
 
+      - name: Cloud 128-case deterministic malformed AArch64 ELF rejection
+        run: |
+          set -euo pipefail
+          python3 vplnx-r36s/tests/cloud_elf_adversarial.py \
+            --elf-check ./build-vplnx-linux/vplnx-linux-elf-check \
+            --guest /tmp/vplnx-ci-synthetic-guest.so \
+            --partner /tmp/vplnx-ci-synthetic-partner.so \
+            --cases 128 | tee cloud-elf-adversarial.log
+          grep -q 'CLOUD_ELF_MUTATION=PASS' cloud-elf-adversarial.log
+          grep -q 'accepted=0 crashes=0 timeouts=0' cloud-elf-adversarial.log
+
       - name: Ensure R36S diagnostic creates logs before any native binary is present
         run: |
           set -euo pipefail
@@ -393,5 +404,6 @@ jobs:
             synthetic-arm64-boot.log
             synthetic-arm64-reject.log
             synthetic-arm64-stress.log
+            cloud-elf-adversarial.log
           if-no-files-found: error
           retention-days: 14
