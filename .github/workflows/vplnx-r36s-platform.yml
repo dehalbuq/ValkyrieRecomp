@@ -256,6 +256,44 @@ jobs:
           grep -q 'BIONIC_HOST_LINK=PASS' bionic-fortify-imports.log
           grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-fortify-imports.log
 
+      - name: Cloud-only synthetic ARM64 guest executes JNI_OnLoad through ELF/JNI/Bionic
+        run: |
+          set -euo pipefail
+          cc -shared -fPIC -nostdlib -fno-stack-protector -fno-builtin \
+            -Wl,-z,now -Wl,-z,relro \
+            -o /tmp/vplnx-ci-synthetic-partner.so \
+            vplnx-r36s/tests/synthetic_partner.c
+          cc -shared -fPIC -nostdlib -fno-stack-protector -fno-builtin \
+            -Wl,-z,now -Wl,-z,relro \
+            -o /tmp/vplnx-ci-synthetic-guest.so \
+            vplnx-r36s/tests/synthetic_guest.c
+          readelf -h /tmp/vplnx-ci-synthetic-guest.so | grep -q 'Machine:.*AArch64'
+          timeout 15 ./build-vplnx-linux/vplnx-cloud-synthetic-boot \
+            /tmp/vplnx-ci-synthetic-guest.so \
+            /tmp/vplnx-ci-synthetic-partner.so \
+            > synthetic-arm64-boot.log 2>&1
+          cat synthetic-arm64-boot.log
+          grep -q 'SYNTHETIC_ARM64_JNI_ONLOAD=PASS' synthetic-arm64-boot.log
+          grep -q 'SYNTHETIC_ARM64_ISOLATION=PASS' synthetic-arm64-boot.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' synthetic-arm64-boot.log
+          # A swapped/invalid fixture must NEVER be executed.
+          if timeout 10 ./build-vplnx-linux/vplnx-cloud-synthetic-boot \
+              /tmp/vplnx-ci-synthetic-partner.so \
+              /tmp/vplnx-ci-synthetic-guest.so \
+              > synthetic-arm64-reject.log 2>&1; then
+            echo "FAIL: unexpected accepted fixture"
+            exit 1
+          fi
+          grep -q 'SYNTHETIC_GUEST=BLOCKED' synthetic-arm64-reject.log
+          # Repeated independently forked ELF + JNI start/finish cycles.
+          for n in $(seq 1 100); do
+            timeout 10 ./build-vplnx-linux/vplnx-cloud-synthetic-boot \
+              /tmp/vplnx-ci-synthetic-guest.so \
+              /tmp/vplnx-ci-synthetic-partner.so \
+              >/dev/null 2>&1
+          done
+          echo 'SYNTHETIC_ARM64_STRESS=PASS iterations=100' | tee synthetic-arm64-stress.log
+
       - name: Ensure R36S diagnostic creates logs before any native binary is present
         run: |
           set -euo pipefail
@@ -352,5 +390,8 @@ jobs:
             bionic-pthread-imports.log
             bionic-fortify.log
             bionic-fortify-imports.log
+            synthetic-arm64-boot.log
+            synthetic-arm64-reject.log
+            synthetic-arm64-stress.log
           if-no-files-found: error
           retention-days: 14
