@@ -29,6 +29,40 @@ por engano. Se houver novos arquivos de diagnóstico anexados a este chat,
 inspecione **todo o conteúdo**, inclusive `execucao.txt`,
 `resultados.tsv` e `ELF_REAL_IMPORTS.log`.
 
+**Regra nova e prioritária do usuário (10/11/2026):**
+FAÇA TODOS OS TESTES POSSÍVEIS NA NUVEM, SEM PEDIR TESTES DE
+DIAGNÓSTICO NO R36S. Só voltaremos ao portátil quando houver uma
+tentativa real de iniciar a engine. Mantenha a bateria CI
+automatizada em cada push; nunca prometa trabalhar depois de
+encerrar o turno sem uma automação real. Não publique assets
+comerciais e não confunda a engine sintética com Lenneth.
+
+**Últimos resultados da nuvem:**
+- CI principal ARM64 PASS:
+  https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42945365906
+- CI profunda AArch64 release-stress + ASan/UBSan PASS:
+  https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42945392281
+- As duas bibliotecas ELF ARM64 **sintéticas** executaram
+  `JNI_OnLoad` no Linux, interagindo com JNI 1.6, pthread, libc
+  e funções C++ (`__cxa_atexit`/`__cxa_finalize`).
+  Testes adicionais: 250 inicializações Release, 25 sob
+  ASan/UBSan, 128 ELF corrompidos recusados.
+  NENHUMA engine comercial foi executada.
+- `tests/cloud_import_coverage.py` correlacionou os 99 nomes
+  pendentes no último R36S com o código atual: 24 novos provedores,
+  **75 nomes ainda pendentes**, sendo 48 no motor e 43 em libc++
+  (existem nomes compartilhados). Isto é APENAS COBERTURA NOMINAL;
+  **não afirmar nova contagem de relocações reais**.
+- O workflow `vplnx-android-private.yml` foi criado em
+  **dehalbuq/ValkyrieRecomp-build-private** para analisar os dois
+  binários Android arm64 em GitHub Actions privado, quando
+  disponíveis nos caminhos
+  `android-lenneth/lib/arm64-v8a/libMyGame.so` e
+  `android-lenneth/lib/arm64-v8a/libc++_shared.so`.
+  Não publica esses arquivos. Se faltarem, resultado esperado
+  WAITING_FOR_INPUTS. Não declarar o preflight real aprovado
+  até verificar que rodou com as bibliotecas originais.
+
 **Estado comprovado até 10/11/2026:**
 - R36S real usa kernel 4.4.189 ARM64, dArkOSRE Debian 13,
   Mali-G31 com OpenGL ES 3.2 (driver r13p0) via SDL KMSDRM.
@@ -75,18 +109,22 @@ inspecione **todo o conteúdo**, inclusive `execucao.txt`,
   símbolos ELF e verificar a versão.
 
 **Próximo trabalho prioritário:**
-1. Ler `vplnx-r36s/CONTINUAR_AQUI.md` e
-   `vplnx-r36s/PENDENCIAS_TESTE5.md` antes de alterar código.
-2. Validar o **Teste 6 FORTIFY** no R36S, conferindo logs completos
-   `ELF_REAL_IMPORTS.log`; medir a diferença em relação aos 122
-   blockers do Teste 5, sem confundir testes sintéticos com engine.
-3. Implementar **shims ABI Bionic para arquivos/saves/stdio**, ciclo de
-   vida C++ `__cxa_atexit/finalize`, threads/TLS e símbolos restantes;
-   nunca passar `FILE*` e `pthread_t` diretamente para glibc.
-4. Usar GitHub Actions ARM64 para validar por lotes. Não publicar
-   arquivos comerciais no repositório.
-5. Só testar `JNI_OnLoad` original isoladamente após completar as
-   dependências com ABI segura. Nada de offsets hardcoded do Switch.
+1. Examinar `CONTINUAR_AQUI.md` e os últimos GitHub Actions
+   antes de qualquer mudança. Manter branch
+   `port/lenneth-vplnx-linux-arm64-loader`.
+2. NÃO pedir novas execuções no R36S até a fase de testar a engine.
+3. Se ainda não houver bibliotecas Android no **repo privado**,
+   orientar como disponibilizá-las ali, com consentimento do usuário.
+   Não mover automaticamente conteúdo comercial para repos públicos.
+4. Executar e inspecionar **preflight ARM64 privado das libs reais**,
+   medindo as pendências de cada módulo, sem inicializar o jogo.
+5. Resolver imports/ABI restantes (stdio/saves, pthread/TLS,
+   locale/C++), rodando testes sintéticos, stress, ASan/UBSan e
+   adversarial ELF automaticamente em nuvem a cada commit.
+6. Só após os bloqueios realmente resolvidos, preparar teste
+   isolado de `JNI_OnLoad` comercial em ambiente privado de CI.
+   Solicitar R36S somente para tentativa de execução da engine.
+7. Atualizar este prompt e `CONTINUAR_AQUI.md` após cada etapa.
 
 **Minha preferência de trabalho:** português brasileiro, acompanhamento
 amigável e técnico, avanço contínuo com correções reais no GitHub,
