@@ -223,6 +223,39 @@ jobs:
           grep -q 'BIONIC_HOST_LINK=PASS' bionic-pthread-imports.log
           grep -Eq 'host_slots=[1-9][0-9]*' bionic-pthread-imports.log
 
+      - name: Bionic FORTIFY checked-buffer and wchar ARM64 regression
+        run: |
+          set -euo pipefail
+          timeout 30 ./build-vplnx-linux/vplnx-bionic-fortify-check \
+            > bionic-fortify.log 2>&1
+          cat bionic-fortify.log
+          grep -q 'VPLNX_BIONIC_FORTIFY=PASS' bionic-fortify.log
+          grep -q 'violations=ABORT' bionic-fortify.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-fortify.log
+          cat > /tmp/vplnx-fortify-guest.c <<'EOF'
+          #include <stddef.h>
+          extern char *__strcat_chk(char *, const char *, size_t);
+          extern char *__strncpy_chk(char *, const char *, size_t, size_t);
+          extern int __vsnprintf_chk(char *, size_t, int, size_t,
+                                     const char *, void *);
+          extern double wcstod(const unsigned int *, unsigned int **);
+          static volatile void *refs[] = {
+              (void *)&__strcat_chk, (void *)&__strncpy_chk,
+              (void *)&__vsnprintf_chk, (void *)&wcstod
+          };
+          int JNI_OnLoad(void *vm,void *u) {
+              (void)vm;(void)u;
+              return refs[0]!=0;
+          }
+          EOF
+          cc -shared -fPIC -nostdlib -Wl,-z,now \
+            -o /tmp/vplnx-fortify-guest.so /tmp/vplnx-fortify-guest.c
+          ./build-vplnx-linux/vplnx-linux-host-check \
+            /tmp/vplnx-fortify-guest.so /tmp/vplnx-bionic-partner.so \
+            | tee bionic-fortify-imports.log
+          grep -q 'BIONIC_HOST_LINK=PASS' bionic-fortify-imports.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' bionic-fortify-imports.log
+
       - name: Ensure R36S diagnostic creates logs before any native binary is present
         run: |
           set -euo pipefail
@@ -267,6 +300,8 @@ jobs:
           done
           install -m755 build-vplnx-linux/vplnx-bionic-pthread-check \
             r36s-pkg/ports/vplnx-r36s/bin/vplnx-bionic-pthread-check
+          install -m755 build-vplnx-linux/vplnx-bionic-fortify-check \
+            r36s-pkg/ports/vplnx-r36s/bin/vplnx-bionic-fortify-check
           install -m755 vplnx-r36s/PortMaster/run-r36s-diagnostico.sh \
             r36s-pkg/ports/vplnx-r36s/run-r36s-diagnostico.sh
           install -m755 "vplnx-r36s/PortMaster/VPLNX R36S Diagnostico.sh" \
@@ -283,6 +318,7 @@ jobs:
           unzip -Z -1 VPLNX-R36S-DIAGNOSTICO-ARM64.zip | tee r36s-package-list.txt
           grep -q 'ports/vplnx-r36s/bin/vplnx-linux-host-check' r36s-package-list.txt
           grep -q 'ports/vplnx-r36s/bin/vplnx-bionic-pthread-check' r36s-package-list.txt
+          grep -q 'ports/vplnx-r36s/bin/vplnx-bionic-fortify-check' r36s-package-list.txt
           grep -q 'ports/VPLNX R36S Diagnostico.sh' r36s-package-list.txt
           for f in r36s-pkg/ports/vplnx-r36s/bin/*; do
             file "$f" | grep -q 'ARM aarch64'
@@ -314,5 +350,7 @@ jobs:
             bionic-host-blocked.log
             bionic-pthread.log
             bionic-pthread-imports.log
+            bionic-fortify.log
+            bionic-fortify-imports.log
           if-no-files-found: error
           retention-days: 14
