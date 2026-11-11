@@ -93,3 +93,12 @@ add_executable(vplnx-linux-host-check src/host_check.c)
 target_compile_options(vplnx-linux-host-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-host-check PRIVATE
     vplnx-linux-elf vplnx-linux-host)
+
+
+# CI/cloud only: executes open-source synthetic AArch64 .so fixtures through
+# this loader. NEVER bundle this executable in an R36S/PortMaster package.
+add_executable(vplnx-cloud-synthetic-boot tests/synthetic_boot.c)
+target_include_directories(vplnx-cloud-synthetic-boot PRIVATE upstream src)
+target_compile_options(vplnx-cloud-synthetic-boot PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-cloud-synthetic-boot PRIVATE
+    vplnx-linux-elf vplnx-linux-host vplnx-linux-jni)
