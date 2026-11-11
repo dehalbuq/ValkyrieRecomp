@@ -83,11 +83,21 @@ add_executable(vplnx-bionic-fortify-check src/bionic_fortify_check.c)
 target_compile_options(vplnx-bionic-fortify-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-bionic-fortify-check PRIVATE vplnx-bionic-fortify)
 
+
+# Bionic C++ static destructor table and per-process stack protector canary.
+add_library(vplnx-bionic-cxa STATIC src/bionic_cxa_linux.c)
+target_include_directories(vplnx-bionic-cxa PUBLIC src)
+target_compile_options(vplnx-bionic-cxa PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-bionic-cxa PUBLIC Threads::Threads)
+add_executable(vplnx-bionic-cxa-check src/bionic_cxa_check.c)
+target_compile_options(vplnx-bionic-cxa-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-bionic-cxa-check PRIVATE vplnx-bionic-cxa)
+
 add_library(vplnx-linux-host STATIC src/host_imports_linux.c)
 target_include_directories(vplnx-linux-host PUBLIC src)
 target_compile_options(vplnx-linux-host PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-host PUBLIC
-    vplnx-linux-assets vplnx-linux-opensles vplnx-bionic-pthread vplnx-bionic-fortify
+    vplnx-linux-assets vplnx-linux-opensles vplnx-bionic-pthread vplnx-bionic-fortify vplnx-bionic-cxa
     PkgConfig::GLES2 PkgConfig::EGL m)
 add_executable(vplnx-linux-host-check src/host_check.c)
 target_compile_options(vplnx-linux-host-check PRIVATE -Wall -Wextra -Werror)
