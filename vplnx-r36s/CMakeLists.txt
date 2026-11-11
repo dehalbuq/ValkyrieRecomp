@@ -75,11 +75,19 @@ add_executable(vplnx-bionic-pthread-check src/bionic_pthread_check.c)
 target_compile_options(vplnx-bionic-pthread-check PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-bionic-pthread-check PRIVATE vplnx-bionic-pthread)
 
+# Android/Bionic FORTIFY wrappers validate buffer boundaries before use.
+add_library(vplnx-bionic-fortify STATIC src/bionic_fortify_linux.c)
+target_include_directories(vplnx-bionic-fortify PUBLIC src)
+target_compile_options(vplnx-bionic-fortify PRIVATE -Wall -Wextra -Werror)
+add_executable(vplnx-bionic-fortify-check src/bionic_fortify_check.c)
+target_compile_options(vplnx-bionic-fortify-check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(vplnx-bionic-fortify-check PRIVATE vplnx-bionic-fortify)
+
 add_library(vplnx-linux-host STATIC src/host_imports_linux.c)
 target_include_directories(vplnx-linux-host PUBLIC src)
 target_compile_options(vplnx-linux-host PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(vplnx-linux-host PUBLIC
-    vplnx-linux-assets vplnx-linux-opensles vplnx-bionic-pthread
+    vplnx-linux-assets vplnx-linux-opensles vplnx-bionic-pthread vplnx-bionic-fortify
     PkgConfig::GLES2 PkgConfig::EGL m)
 add_executable(vplnx-linux-host-check src/host_check.c)
 target_compile_options(vplnx-linux-host-check PRIVATE -Wall -Wextra -Werror)
