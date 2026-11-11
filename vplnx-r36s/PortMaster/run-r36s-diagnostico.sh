@@ -110,13 +110,19 @@ run_case() {
 }
 printf 'teste\tstatus\tcodigo\n' > "$RUN/resultados.tsv"
 snapshot
-for f in vplnx-linux-platform-check vplnx-linux-audio-check vplnx-linux-jni-check vplnx-linux-host-check vplnx-linux-elf-check vplnx-bionic-pthread-check; do
+for f in vplnx-linux-platform-check vplnx-linux-audio-check vplnx-linux-jni-check vplnx-linux-host-check vplnx-linux-elf-check vplnx-bionic-pthread-check vplnx-bionic-fortify-check; do
     if [ -f "$BIN/$f" ]; then
         chmod +x "$BIN/$f" 2>/dev/null || true
         printf '\n%s:\n' "$f"
         if command -v ldd >/dev/null 2>&1; then ldd "$BIN/$f" || true; fi
     fi
 done
+
+if [ -x "$BIN/vplnx-bionic-fortify-check" ]; then
+    run_case FORTIFY_BIONIC_ABI 'VPLNX_BIONIC_FORTIFY=PASS' "$BIN/vplnx-bionic-fortify-check"
+else
+    echo "FORTIFY_BIONIC_ABI=SKIP_SEM_EXECUTAVEL"
+fi
 
 if [ -x "$BIN/vplnx-bionic-pthread-check" ]; then
     run_case PTHREAD_BIONIC_ABI 'BIONIC_PTHREAD_ABI=PASS' "$BIN/vplnx-bionic-pthread-check"
