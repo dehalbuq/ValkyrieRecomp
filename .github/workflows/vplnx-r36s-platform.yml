@@ -314,6 +314,16 @@ jobs:
           grep -q 'CLOUD_ELF_MUTATION=PASS' cloud-elf-adversarial.log
           grep -q 'accepted=0 crashes=0 timeouts=0' cloud-elf-adversarial.log
 
+      - name: Audit public Test5 import baseline against current Bionic host source
+        run: |
+          set -euo pipefail
+          python3 vplnx-r36s/tests/cloud_import_coverage.py \
+            --evidence vplnx-r36s/PENDENCIAS_TESTE5.md \
+            --imports vplnx-r36s/src/host_imports_linux.c \
+            | tee cloud-import-coverage.log
+          grep -q 'CLOUD_IMPORT_COVERAGE=PASS' cloud-import-coverage.log
+          grep -q 'name_match_only=1' cloud-import-coverage.log
+
       - name: Ensure R36S diagnostic creates logs before any native binary is present
         run: |
           set -euo pipefail
@@ -415,5 +425,6 @@ jobs:
             synthetic-arm64-stress.log
             cloud-elf-adversarial.log
             bionic-cxa.log
+            cloud-import-coverage.log
           if-no-files-found: error
           retention-days: 14
