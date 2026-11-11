@@ -142,7 +142,7 @@ static const Import native_imports[] = {
     FN_SELF(rand), FN_SELF(srand),
     /* wchar_t is 32-bit on both target Bionic and Linux AArch64; these
      * entrypoints use scalar parameters and wchar_t buffers, not locale_t
-     * or opaque FILE*/mbstate_t objects. */
+     * or opaque Bionic stream and conversion-state objects. */
     FN_SELF(btowc), FN_SELF(wctob),
     FN_SELF(wcstod), FN_SELF(wcstof),
     FN_SELF(wcstol), FN_SELF(wcstoll),
