@@ -8,6 +8,7 @@ extern void __stack_chk_fail(void) __attribute__((noreturn));
 #include "host_imports_linux.h"
 #include "assets_linux.h"
 #include "bionic_pthread_linux.h"
+#include "bionic_fortify_linux.h"
 #include "../upstream/opensles.h"
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>
@@ -139,6 +140,17 @@ static const Import native_imports[] = {
     FN_SELF(strncat), FN_SELF(isalnum), FN_SELF(isalpha),
     FN_SELF(isspace), FN_SELF(tolower), FN_SELF(toupper),
     FN_SELF(rand), FN_SELF(srand),
+    /* wchar_t is 32-bit on both target Bionic and Linux AArch64; these
+     * entrypoints use scalar parameters and wchar_t buffers, not locale_t
+     * or opaque FILE*/mbstate_t objects. */
+    FN_SELF(btowc), FN_SELF(wctob),
+    FN_SELF(wcstod), FN_SELF(wcstof),
+    FN_SELF(wcstol), FN_SELF(wcstoll),
+    FN_SELF(wcstoul), FN_SELF(wcstoull),
+    FN_SELF(wcscoll), FN_SELF(wcsxfrm),
+    FN_SELF(strcoll), FN_SELF(strxfrm),
+    FN_SELF(strtold), FN_SELF(swprintf), FN_SELF(vasprintf),
+
     /* Straight, scalar/byte-buffer LP64 Linux/Bionic ABI-compatible calls.
      * fopen/FILE*, pthread_create/pthread_t and stat layouts remain BLOCKED. */
     FN_SELF(time), FN_SELF(clock_gettime), FN_SELF(clock_nanosleep),
@@ -166,6 +178,13 @@ static const Import native_imports[] = {
 
 
     FN("__stack_chk_fail",__stack_chk_fail),
+    /* Android Bionic checked accessors, not unchecked glibc shortcuts. */
+    FN("__strcat_chk",vpl_bf_strcat),
+    FN("__strncpy_chk",vpl_bf_strncpy),
+    FN("__strchr_chk",vpl_bf_strchr),
+    FN("__read_chk",vpl_bf_read),
+    FN("__vsnprintf_chk",vpl_bf_vsnprintf),
+    FN("__vsprintf_chk",vpl_bf_vsprintf),
     FN("__errno",android_errno),
     FN("__memcpy_chk",android_memcpy_chk),
     FN("__memmove_chk",android_memmove_chk),
@@ -299,7 +318,9 @@ int vpl_linux_host_selftest(void) {
         "atan2f","strtod","memchr","glMapBufferOES","glDeleteFramebuffers",
         "pthread_mutex_lock","pthread_cond_wait","pthread_mutexattr_settype",
         "time","clock_gettime","nanosleep","read","write","close",
-        "posix_memalign","snprintf","sscanf","__stack_chk_fail"
+        "posix_memalign","snprintf","sscanf","__stack_chk_fail",
+        "__strcat_chk","__strncpy_chk","__strchr_chk","__read_chk",
+        "__vsnprintf_chk","__vsprintf_chk","wcstod","wcstoul","strxfrm"
     };
     const char *forbidden[] = {
         "pthread_create","pthread_rwlock_init","fopen","fread","fclose",
