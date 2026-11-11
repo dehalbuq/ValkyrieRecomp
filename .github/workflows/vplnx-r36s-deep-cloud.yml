@@ -1,0 +1,146 @@
+name: Lenneth vpl_nx ARM64 deep cloud regression (no game files)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - port/lenneth-vplnx-linux-arm64-loader
+    paths:
+      - "vplnx-r36s/src/**"
+      - "vplnx-r36s/upstream/**"
+      - "vplnx-r36s/tests/**"
+      - "vplnx-r36s/CMakeLists.txt"
+      - ".github/workflows/vplnx-r36s-deep-cloud.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vplnx-deep-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  deep-abi-arm64:
+    name: ARM64 ABI ${{ matrix.profile }} - synthetic only
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [release-stress, asan-ubsan]
+    env:
+      ASAN_OPTIONS: detect_leaks=0:abort_on_error=1:allocator_may_return_null=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native ARM64 SDL2/EGL and compiler toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config libsdl2-dev libgles2-mesa-dev \
+            libegl-dev file binutils python3
+
+      - name: Configure ABI mode with optional memory and undefined behavior sanitizers
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.profile }}" = asan-ubsan ]; then
+            cmake -S vplnx-r36s -B build-deep -G Ninja \
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+              -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+              -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          else
+            cmake -S vplnx-r36s -B build-deep -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release
+          fi
+          cmake --build build-deep --parallel 4
+
+      - name: Compile fresh public synthetic ARM64 libraries
+        run: |
+          set -euo pipefail
+          cc -shared -fPIC -nostdlib -fno-stack-protector -fno-builtin \
+            -Wl,-z,now -Wl,-z,relro \
+            -o /tmp/vplnx-ci-synthetic-partner.so vplnx-r36s/tests/synthetic_partner.c
+          cc -shared -fPIC -nostdlib -fno-stack-protector -fno-builtin \
+            -Wl,-z,now -Wl,-z,relro \
+            -o /tmp/vplnx-ci-synthetic-guest.so vplnx-r36s/tests/synthetic_guest.c
+          readelf -h /tmp/vplnx-ci-synthetic-guest.so | grep -q 'Machine:.*AArch64'
+          readelf -h build-deep/vplnx-cloud-synthetic-boot | grep -q 'Machine:.*AArch64'
+          ! find vplnx-r36s -type f \( -name libMyGame.so -o -name libc++_shared.so -o -name '*.cpk' \) | grep -q .
+
+      - name: Cloud-only boot through ELF/JNI/Bionic with synthetic executable code
+        run: |
+          set -euo pipefail
+          timeout 20 build-deep/vplnx-cloud-synthetic-boot \
+            /tmp/vplnx-ci-synthetic-guest.so \
+            /tmp/vplnx-ci-synthetic-partner.so > boot.log 2>&1
+          cat boot.log
+          grep -q 'SYNTHETIC_ARM64_JNI_ONLOAD=PASS' boot.log
+          grep -q 'SYNTHETIC_ARM64_ISOLATION=PASS' boot.log
+          grep -q 'COMMERCIAL_ENGINE_EXECUTED=NO' boot.log
+          if timeout 10 build-deep/vplnx-cloud-synthetic-boot \
+              /tmp/vplnx-ci-synthetic-partner.so \
+              /tmp/vplnx-ci-synthetic-guest.so > reject.log 2>&1; then
+            echo 'Unexpected execution of wrong fixture'
+            exit 1
+          fi
+          grep -q 'SYNTHETIC_GUEST=BLOCKED' reject.log
+
+      - name: JNI, audio, FORTIFY and pthread ABI tests
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vplnx-deep-assets/nested
+          printf 'SYNTHJNI' > /tmp/vplnx-deep-assets/sample.bin
+          build-deep/vplnx-linux-host-check --host-selftest | tee host.log
+          build-deep/vplnx-bionic-pthread-check | tee pthread.log
+          build-deep/vplnx-bionic-fortify-check > fortify.log 2>&1
+          build-deep/vplnx-linux-audio-check | tee audio.log
+          build-deep/vplnx-linux-jni-check /tmp/vplnx-deep-assets | tee jni.log
+          grep -q 'BIONIC_HOST_SELFTEST=PASS' host.log
+          grep -q 'BIONIC_PTHREAD_ABI=PASS' pthread.log
+          grep -q 'VPLNX_BIONIC_FORTIFY=PASS' fortify.log
+          grep -q 'VPLNX_OPENSL=PASS' audio.log
+          grep -q 'VPLNX_JNI_ABI=PASS' jni.log
+
+      - name: Deterministic malformed ELF rejection regression
+        run: |
+          set -euo pipefail
+          python3 vplnx-r36s/tests/cloud_elf_adversarial.py \
+            --elf-check "$PWD/build-deep/vplnx-linux-elf-check" \
+            --guest /tmp/vplnx-ci-synthetic-guest.so \
+            --partner /tmp/vplnx-ci-synthetic-partner.so \
+            --cases 128 | tee elf-malformed.log
+          grep -q 'CLOUD_ELF_MUTATION=PASS' elf-malformed.log
+
+      - name: Repeat guest boot and host pthread synchronization cycles
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.profile }}" = asan-ubsan ]; then N=25; else N=250; fi
+          for i in $(seq 1 "$N"); do
+            timeout 10 build-deep/vplnx-cloud-synthetic-boot \
+              /tmp/vplnx-ci-synthetic-guest.so \
+              /tmp/vplnx-ci-synthetic-partner.so >/dev/null 2>&1
+            if [ $((i % 10)) -eq 0 ]; then
+              build-deep/vplnx-bionic-pthread-check >/dev/null 2>&1
+            fi
+          done
+          echo "CLOUD_ARM64_DEEP=PASS profile=${{ matrix.profile }} boots=$N" \
+            | tee deep-summary.log
+
+      - name: Publish cloud-only logs (no guest binaries)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vplnx-cloud-${{ matrix.profile }}-reports
+          path: |
+            boot.log
+            reject.log
+            host.log
+            pthread.log
+            fortify.log
+            audio.log
+            jni.log
+            elf-malformed.log
+            deep-summary.log
+          if-no-files-found: warn
+          retention-days: 14
