@@ -1,5 +1,16 @@
 # Lenneth R36S: Linux ARM64 port based on vpl_nx
 
+> **Nova orientação: somente nuvem até o primeiro teste de inicialização real.**
+> NÃO peça mais diagnósticos ou instalações no R36S nesta fase.
+> [Bateria CI ARM64/ASan/UBSan](https://github.com/dehalbuq/ValkyrieRecomp/actions/workflows/vplnx-r36s-deep-cloud.yml)
+> executa em cada push de código, sem dados comerciais.
+> [Preflight opcional das bibliotecas no repositório privado](https://github.com/dehalbuq/ValkyrieRecomp-build-private/actions/workflows/vplnx-android-private.yml)
+> foi preparado para analisar os ELF originais sem executar a engine.
+> **Último estudo de cobertura:** 24 nomes adicionais com provedores,
+> 75 nomes ainda sem provedor; a última contagem real continua 122
+> relocações pendentes no Teste 5.
+
+
 > **Quer retomar o trabalho em outro chat?**
 > Abra [CONTINUAR AQUI — checkpoint mais recente](CONTINUAR_AQUI.md)
 > e [PROMPT para novo chat](PROMPT_RETOMADA_CHATGPT.md).
