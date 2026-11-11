@@ -5,6 +5,22 @@
 > e o [PROMPT_RETOMADA_CHATGPT.md](PROMPT_RETOMADA_CHATGPT.md)
 > **a cada avanço**, antes de encerrar uma sessão ou entregar um pacote de teste.
 
+## Decisão de workflow do usuário — apenas nuvem até iniciar o jogo
+
+**Solicitação expressa em 10/11/2026:** executar **todos os testes
+que puder no GitHub Actions/cloud ARM64 em lote e em sequência**, sem
+pedir novas rodadas de teste diagnóstico no R36S. **Voltar ao R36S
+apenas para testar a inicialização real da engine**, quando a camada
+Android/Bionic/JNI estiver suficientemente completa para justificar.
+A automação do GitHub executa testes em cada push relevante, mas o
+assistente não trabalha indefinidamente em background depois de
+encerrar o turno.
+
+**Não mandar novos ZIPs PortMaster apenas para testar imports.**
+Em vez disso, melhorar os simuladores sintéticos, ASan/UBSan,
+ELF-fuzz e o runner **privado** com as bibliotecas Android originais.
+Proteger os arquivos comerciais: nunca enviá-los ao repo público.
+
 ## 1. Identidade correta do projeto
 
 - Repositório de trabalho: https://github.com/dehalbuq/ValkyrieRecomp
@@ -134,6 +150,60 @@ inclui seis binários ELF64 AArch64, sem conteúdo do jogo, e foi
 inspecionado depois do build. **Ainda não foi testado o comportamento
 de recuperação após queda de energia no R36S real.**
 
+## 3A. CI em nuvem — etapa mais recente (sem R36S)
+
+Nova bateria automática
+[**deep cloud ARM64**](https://github.com/dehalbuq/ValkyrieRecomp/actions/workflows/vplnx-r36s-deep-cloud.yml),
+com dois perfis independentes (ambos passaram no
+[run 42945392281](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42945392281)):
+- **Release stress:** 250 chamadas de inicialização sintética ARM64,
+  mais sincronização repetida com pthread.
+- **ASan/UBSan:** 25 ciclos adicionais sob AddressSanitizer e
+  UndefinedBehaviorSanitizer.
+- **128 cabeçalhos ELF adulterados** rejeitados de modo controlado;
+  teste de fixture inválida não executa código.
+- JNI, OpenSL ES/SDL2, FORTIFY, pthread, C++ lifecycle e assets
+  possuem regressões próprias.
+- Carregador executou com sucesso o **JNI_OnLoad de uma biblioteca
+  fictícia** produzida em CI, com ponte para ELF parceiro, JNI 1.6,
+  pthread, funções libc, `__cxa_atexit`/`__cxa_finalize`,
+  `__stack_chk_guard` aleatório e W^X.
+- Os testes **NÃO** executaram nenhum código do jogo comercial.
+
+A suíte principal ARM64 passou no
+[run 42945365906](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42945365906).
+
+**Cobertura somente por nome (sem os .so originais):**
+`tests/cloud_import_coverage.py` compara os 99 símbolos pendentes
+do Teste 5 com o código atual da allowlist. Resultado da CI:
+**24 nomes passaram a ter provedores, 75 continuam sem provedor**.
+No motor, 48 nomes continuam faltando; na libc++, 43.
+**Isso não é uma nova contagem real de relocações nem prova de ABI.**
+O último número real continua **59+63 = 122 relocações pendentes**
+no Teste 5.
+
+**Novo workflow PRIVADO para medir a próxima etapa sem R36S:**
+`dehalbuq/ValkyrieRecomp-build-private`,
+arquivo `.github/workflows/vplnx-android-private.yml` em `main`.
+Ele busca este código-fonte público na branch ativa e **apenas
+se os arquivos existirem** lê as bibliotecas ARM64 pertencentes ao
+usuário nos caminhos privados:
+`android-lenneth/lib/arm64-v8a/libMyGame.so` e
+`android-lenneth/lib/arm64-v8a/libc++_shared.so`.
+Executa análise ELF sem inicializar engine; guarda logs em artifacts
+SOMENTE do repositório privado por 7 dias.
+O workflow foi preparado, **mas ainda não se confirmou aqui que
+as duas bibliotecas Android estejam presentes nem que a execução
+privada de análise com elas tenha concluído**. Não declarar PASS
+do preflight real sem ver o resultado.
+As imagens de disco PS1 do mesmo repositório não são necessárias.
+
+**Gates restantes**: arquivos/stdio/saves com ABI de structs correta,
+`pthread_create` e TLS, conversões dependentes de locale,
+`dlopen/dlsym`, `setjmp/longjmp`, ciclo de vida
+`__cxa_thread_atexit_impl`, demais funções Bionic. Só após
+validação real e segura considerar execução de `JNI_OnLoad` original.
+
 ## 4. Regras de segurança e compatibilidade
 
 1. Não publicar, anexar ao GitHub Actions público, nem armazenar no repo
@@ -154,24 +224,25 @@ de recuperação após queda de energia no R36S real.**
 
 ## 5. Próximas tarefas em ordem recomendada
 
-1. **Teste 5 recebido e logs ELF completos.** Usar a
-   [lista de 99 símbolos reais](PENDENCIAS_TESTE5.md), sem repetir
-   testes que já passaram. Confirmar Teste 6 com o novo FORTIFY no
-   hardware quando o CI e o pacote estiverem validados.
-2. **Bionic FORTIFY e operações wchar básicas**: implementação de
-   seis wrappers e da allowlist foi enviada ao GitHub. Validar regressões
-   em ARM64 e medir a redução *real* das 122 relocações anteriores.
-3. Implementar **arquivos/saves/stdio com objetos Bionic opacos** e
-   caminhos confinados; não expor `FILE*` ou `open` ilimitado na glibc.
-4. Adaptar **threads/TLS e lifecycle C++**:
-   `pthread_create`, `pthread_key_*`, `__cxa_atexit`,
-   `__cxa_finalize`, `__cxa_thread_atexit_impl`, unwind e
-   `__stack_chk_guard`. `setjmp/longjmp` exigem ponte própria.
-5. Quando **todas** as importações e APIs relevantes tiverem
-   implementações seguras, avaliar `JNI_OnLoad` comercial em
-   processo isolado com timeout/logs privados e sem uploads ao CI.
-6. Depois: `nativeInit/nativeRender` com GLES2, FPS e controle,
-   sincronização áudio, intro skip sem offsets fixos de outra build.
+1. **NÃO pedir teste no R36S agora.** O objetivo do usuário é
+   continuar na nuvem até o primeiro teste de inicialização da engine.
+2. Conferir execução do workflow `vplnx-android-private.yml` em
+   `dehalbuq/ValkyrieRecomp-build-private`. Se ainda faltarem os dois
+   `.so`, orientar o usuário a disponibilizar suas próprias cópias
+   **somente no repositório privado**, com controle do usuário.
+3. Quando disponíveis, executar o **preflight privado real** para
+   obter os números exatos após os 24 provedores novos, SEM executar
+   `JNI_OnLoad` comercial nem publicar dados. Acompanhar imports
+   não resolvidos por biblioteca.
+4. Desenvolver e testar as implementações restantes: stdio/saves
+   confinados, pthread/TLS, C++/locale/unwind/dl*, com stress, ABI
+   negativa, ASan/UBSan e fuzz em GitHub Actions.
+5. Com dependências e ABI suficientemente validadas, criar
+   **harness de inicialização comercial isolada em CI privado**,
+   com timeout, sandbox e logs; só pedir o R36S quando houver
+   uma tentativa legítima de rodar a engine.
+6. Atualizar o checkpoint e o prompt ao final de cada avanço,
+   inclusive resultado/links das CI e diferenças reais vs sintéticas.
 
 ## 6. Como retomar em outro chat
 
@@ -191,6 +262,9 @@ de continuar. Não supor acesso a este chat.
 - [CI aprovado, etapa Teste 4 POSIX (antes dos snapshots)](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42895373964)
 - [CI aprovado, Teste 5 com snapshots e backup automático](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42906180629)
 - [CI aprovado, Teste 6 FORTIFY ARM64](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42941739463)
+- [CI matriz ARM64 deep stress + ASan/UBSan (PASS)](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42945392281)
+- [CI ARM64 JNI_OnLoad sintético e imports (PASS)](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42945365906)
+- [Workflow privado para bibliotecas Android próprias](https://github.com/dehalbuq/ValkyrieRecomp-build-private/actions/workflows/vplnx-android-private.yml)
 - [Código upstream MIT vpl_nx](https://github.com/delsonazevedo/vpl_nx)
 
 **Checklist de encerramento de cada sessão:** atualizar este estado,
