@@ -105,6 +105,18 @@ O ramo contém:
 - `.github/workflows/vplnx-r36s-platform.yml`: compilação ARM64,
   testes sintéticos e ZIP PortMaster (sem arquivos proprietários)
 
+**Teste 6 de compatibilidade Bionic/FORTIFY (após os logs do Teste 5):**
+adicionadas `src/bionic_fortify_linux.[ch]` e
+`src/bionic_fortify_check.c`. São seis wrappers de fortificação
+(`__strcat_chk`, `__strncpy_chk`, `__strchr_chk`,
+`__read_chk`, `__vsnprintf_chk`, `__vsprintf_chk`),
+além de funções wchar/tipos compatíveis adicionadas na allowlist
+do host. Testes sintéticos de chamadas válidas e `SIGABRT` para
+overflow passaram no [GitHub Actions 42941739463](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42941739463).
+O ZIP PortMaster resultante possui **7 executáveis AArch64**.
+**Nenhum teste foi executado com as bibliotecas comerciais após
+essa mudança**; os números 59+63 ainda são a última contagem real.
+
 **Último avanço de código antes deste checkpoint:** foi criada
 persistência de diagnósticos por snapshots atômicos após cada teste,
 com preservação do arquivo anterior:
@@ -178,6 +190,7 @@ de continuar. Não supor acesso a este chat.
 - [Workflow de compilação ARM64](https://github.com/dehalbuq/ValkyrieRecomp/actions/workflows/vplnx-r36s-platform.yml)
 - [CI aprovado, etapa Teste 4 POSIX (antes dos snapshots)](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42895373964)
 - [CI aprovado, Teste 5 com snapshots e backup automático](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42906180629)
+- [CI aprovado, Teste 6 FORTIFY ARM64](https://github.com/dehalbuq/ValkyrieRecomp/actions/runs/42941739463)
 - [Código upstream MIT vpl_nx](https://github.com/delsonazevedo/vpl_nx)
 
 **Checklist de encerramento de cada sessão:** atualizar este estado,
