@@ -24,49 +24,62 @@
 - Não há jogo executando neste ramo: **não chamar JNI_OnLoad comercial,
   inicializadores ou nativeRender antes da conclusão dos bloqueios de ABI**.
 
-## 2. Situação comprovada no R36S
+## 2. Último diagnóstico REAL do R36S — Teste 5
 
-**Última evidência recebida:** ZIP manual
-`execucao-20250904-080230-3358.zip` recebido em **10/11/2026**.
-**Atenção ao relógio:** o dArkOSRE registrou **04/09/2025**, aparentemente
-o horário local do dispositivo reiniciado, e **não** a data da coleta real.
-Use data de recebimento/commits/execuções do CI ao comparar.
+**Recebido em 10/11/2026**: `VPLNX_R36S_DIAGNOSTICOS.tar(3).gz` (3.886 bytes).
+Pasta interna: `execucao-20250904-080307-$` — o relógio do dArkOSRE
+**está incorreto**, registrando setembro de 2025. Usar a data de
+recebimento e CI para ordenar os testes; não inferir que foi executado
+em 2025.
 
-A coleta manual contém `execucao.txt` completo e `resultados.tsv`, mas
-`ELF_REAL_IMPORTS.log`, `ELF_REAL_BASIC.log`, `OPENSL_AUDIO_FISICO.log`,
-`JNI_ASSETS.log` e `resumo.txt` têm **zero bytes** nesse ZIP.
-Por isso os PASS/BLOCKED abaixo são confirmados pelo **log central**, mas
-**não se pode extrair dele os números atualizados de relocações nem a lista
-completa de imports pendentes**. Não utilizar números de outras execuções
-como se fossem medidos neste ZIP.
+**Boa notícia:** após a correção de snapshots atômicos, **todos os nove
+arquivos de texto da execução têm tamanho não zero**, inclusive
+`ELF_REAL_IMPORTS.log` (7.710 bytes), `ELF_REAL_BASIC.log`
+(2.472 bytes), `execucao.txt` (6.175 bytes), `resultados.tsv`
+e `resumo.txt`. `FINAL=FINISHED`. **Isso confirma uma coleta
+completa, mas ainda não prova recuperação após queda de energia**.
 
-| Teste | Resultado no ZIP manual | Evidência |
+| Teste | R36S | Evidência |
 |---|---|---|
-| PTHREAD_BIONIC_ABI | **PASS** | mutex 40 bytes, cond 48 bytes; ciclo de vida e cond_wait |
-| HOST_SAFE | **PASS** | allowlist Bionic testada; ABI opaca não liberada |
-| GLES2_GPU | **PASS** | SDL KMSDRM, GPU ARM Mali-G31 |
-| GLES3_GPU | **PASS** | SDL KMSDRM, GPU ARM Mali-G31 |
-| OPENSL_AUDIO_FISICO | **PASS** | SDL abriu 44100 Hz, 2 canais |
-| JNI_ASSETS | **PASS** | JNI 1.6, arrays, strings, descritores de asset |
-| ELF_REAL_IMPORTS | **BLOCKED** | não foi possível finalizar a vinculação |
-| ELF_REAL_BASIC | **BLOCKED** | JNI exports 4/4, mas dependências faltam |
+| PTHREAD_BIONIC_ABI | **PASS** | mutex 40, cond 48 bytes, sincronização |
+| HOST_SAFE | **PASS** | allowlist de Bionic sem liberações indevidas |
+| GLES2_GPU | **PASS** | SDL KMSDRM, ARM Mali-G31 |
+| GLES3_GPU | **PASS** | OpenGL ES 3.2, GPU real |
+| OPENSL_AUDIO_FISICO | **PASS** | 44.100 Hz estéreo, callback ativo |
+| JNI_ASSETS | **PASS** | JNI 1.6, strings/arrays, arquivo de teste |
+| ELF_REAL_IMPORTS | **BLOCKED** | vinculação real incompleta |
+| ELF_REAL_BASIC | **BLOCKED** | exports 4/4 presentes, sem host imports |
 
 Hardware capturado: Linux **4.4.189**, **aarch64**, Debian **13/trixie**
-(dArkOSRE), **MemTotal 916800 kB**, **SwapTotal 0**,
-`/dev/dri/card0` e `renderD128`, EGL/GLES **OpenGL ES 3.2
-v1.r13p0-01rel0** na **Mali-G31** real (não llvmpipe).
-Controle **GO-Super Gamepad** detectado.
+(dArkOSRE), **916800 kB de RAM**, **sem swap**, DRM card0/renderD128,
+GPU ARM **Mali-G31**, driver GLES **3.2 v1.r13p0-01rel0**,
+controle **GO-Super Gamepad** detectado.
 
-O log central mostra, entre as últimas funções ausentes do módulo
-`libc++_shared.so`, `mbrlen`, `vfprintf`, `wcrtomb`,
-`__cxa_atexit`. **Isso não é a lista completa de ausências**.
-As chamadas da `libMyGame.so` e da `libc++_shared.so` ainda são
-analisadas apenas **sem execução de código comercial**.
+### Contagem exata das relocações sem provedor
 
-Para referência histórica, antes da ampliação POSIX (Teste 3),
-haviam sido anotadas **85 relocações pendentes no motor e 98 no C++**.
-**NÃO** declarar essas quantidades como contagem do Teste 4: os logs
-individuais foram recebidos vazios.
+| Módulo | Relocações pendentes | Nomes distintos |
+|---|---:|---:|
+| `libMyGame.so` | **59** | **57** |
+| `libc++_shared.so` | **63** | **62** |
+| **Total** | **122** | **99 no conjunto**, 20 comuns |
+
+Comparação: diagnóstico **Teste 3 = 85 + 98 = 183** relocações
+pendentes. O Teste 5 tem **61 relocações a menos**, após alterações
+na allowlist POSIX. Não extrapolar esse ganho para FPS ou jogo jogável.
+
+`BIONIC_HOST_IMPORTS accepted=281 blocked=122`.
+`guest host_resolved=211`, `partner host_resolved=70`.
+`unsupported=0`, `relr=0`, mas `MEMORY_PROTECTION=BLOCKED`.
+`ELF_REAL_BASIC` reporta 270+133 faltantes intencionalmente
+**porque NÃO usa a tabela de imports do host**; não somar esses valores
+às 122 relocações ainda pendentes na análise principal.
+
+**Lista COMPLETA e priorização**:
+[PENDENCIAS_TESTE5.md](PENDENCIAS_TESTE5.md).
+
+Nenhum construtor ou `JNI_OnLoad` do motor comercial foi executado.
+O wrapper só manipula as bibliotecas reais em memória para análise
+e não as incluiu no arquivo de diagnóstico.
 
 ## 3. Estado atual do código
 
@@ -76,6 +89,9 @@ O ramo contém:
   módulos, W^X, fail-closed para imports ausentes
 - `src/host_imports_linux.[ch]`: allowlist de Bionic/libc, NDK assets,
   OpenSL, GLES e parte de POSIX sem `FILE*` ou caminhos livres
+- `src/bionic_fortify_linux.[ch]`: wrappers FORTIFY de strings, leitura e
+  printf verificados; `src/bionic_fortify_check.c` testa aborts por overflow;
+  ainda exige validação de compatibilidade com as bibliotecas reais.
 - `src/bionic_pthread_linux.[ch]`: mutex/cond Android de 40/48 bytes,
   mapeados para objetos pthread privados do Linux; ainda não inclui
   `pthread_create`, `pthread_rwlock`, TLS ou atributos avançados
@@ -126,24 +142,24 @@ de recuperação após queda de energia no R36S real.**
 
 ## 5. Próximas tarefas em ordem recomendada
 
-1. **CI dos snapshots aprovado** (run 42906180629). Próximo teste com
-   o pacote Teste 5 no R36S deve confirmar que `DIAGNOSTICOS.tar.gz`
-   sobrevive a reinicialização forçada e que `DIAGNOSTICOS_ANTERIOR.tar.gz`
-   conserva a execução anterior; não reiniciar propositalmente durante
-   teste comercial, e manter a pasta detalhada se houver dúvida.
-2. **Recuperar ELF_REAL_IMPORTS.log completo**, preferencialmente por ZIP
-   gerado com snapshots atômicos ou copiando a pasta detalhada depois da
-   execução. Determinar imports que bloqueiam cada módulo e contagens novas.
-3. Priorizar **ABI Bionic de arquivo/stdio e `__cxa_atexit`/destrutores**;
-   estudar `pthread_create`, `pthread_rwlock`, TLS e unwind separadamente.
-   Não habilitar `fopen`/file API direta sem paths de assets/saves isolados.
-4. Ampliar os testes sintéticos do loader e impedir `mprotect(...,PROT_EXEC)`
-   quando faltar qualquer resolução ou validação relevante.
-5. Quando **todos** os blockers estiverem resolvidos, tentar
-   `JNI_OnLoad` real em **processo isolado**, com timeout/logs e arquivos
-   privados, seguido depois por EGL/contexto e `nativeInit/nativeRender`.
-6. Medir FPS e identificar renderização ES2 vs ES3; só então estudar
-   pular introduções com segurança e sem usar offsets de outra versão.
+1. **Teste 5 recebido e logs ELF completos.** Usar a
+   [lista de 99 símbolos reais](PENDENCIAS_TESTE5.md), sem repetir
+   testes que já passaram. Confirmar Teste 6 com o novo FORTIFY no
+   hardware quando o CI e o pacote estiverem validados.
+2. **Bionic FORTIFY e operações wchar básicas**: implementação de
+   seis wrappers e da allowlist foi enviada ao GitHub. Validar regressões
+   em ARM64 e medir a redução *real* das 122 relocações anteriores.
+3. Implementar **arquivos/saves/stdio com objetos Bionic opacos** e
+   caminhos confinados; não expor `FILE*` ou `open` ilimitado na glibc.
+4. Adaptar **threads/TLS e lifecycle C++**:
+   `pthread_create`, `pthread_key_*`, `__cxa_atexit`,
+   `__cxa_finalize`, `__cxa_thread_atexit_impl`, unwind e
+   `__stack_chk_guard`. `setjmp/longjmp` exigem ponte própria.
+5. Quando **todas** as importações e APIs relevantes tiverem
+   implementações seguras, avaliar `JNI_OnLoad` comercial em
+   processo isolado com timeout/logs privados e sem uploads ao CI.
+6. Depois: `nativeInit/nativeRender` com GLES2, FPS e controle,
+   sincronização áudio, intro skip sem offsets fixos de outra build.
 
 ## 6. Como retomar em outro chat
 
@@ -155,6 +171,8 @@ o último commit/CI**, e verificar qualquer ZIP que o usuário envie antes
 de continuar. Não supor acesso a este chat.
 
 ## 7. Links de referência
+
+- [Lista completa de pendências ELF Teste 5](PENDENCIAS_TESTE5.md)
 
 - [Código ativo neste ramo](https://github.com/dehalbuq/ValkyrieRecomp/tree/port/lenneth-vplnx-linux-arm64-loader/vplnx-r36s)
 - [Workflow de compilação ARM64](https://github.com/dehalbuq/ValkyrieRecomp/actions/workflows/vplnx-r36s-platform.yml)
